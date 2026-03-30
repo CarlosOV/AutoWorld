@@ -280,13 +280,19 @@ function drawMap() {
   canvas.width = W; canvas.height = H;
   const ctx = canvas.getContext('2d');
 
+  // Regenerate terrain at higher resolution when zoomed in
+  const terrainW = Math.min(W * Math.max(1, mapZoom * .8), W * 4);
+  const terrainH = Math.min(H * Math.max(1, mapZoom * .8), H * 4);
+
   // Apply zoom/pan transform
   ctx.save();
   ctx.translate(mapPanX * W, mapPanY * H);
   ctx.scale(mapZoom, mapZoom);
 
-  // Draw terrain (seeded from world name stored in page title)
-  const terrain = generateTerrain(W, H, window._worldName || 'Inkari');
+  // Draw terrain at zoom-appropriate resolution
+  const terrain = generateTerrain(terrainW|0, terrainH|0, window._worldName || 'Inkari');
+  ctx.imageSmoothingEnabled = mapZoom < 2;
+  ctx.imageSmoothingQuality = 'high';
   ctx.drawImage(terrain, 0, 0, W, H);
 
   // Vignette
@@ -321,6 +327,71 @@ function drawMap() {
       ctx.font='10px serif'; ctx.fillText('⚔️',cx+ctx.measureText(civ.name).width/2+10, cy-r-8);
     }
   });
+
+  // ── LOD: Extra detail at higher zoom ──
+  if (mapZoom >= 2) {
+    // Roads between civ members
+    const civs = worldData.civilizations || [];
+    civs.forEach((civ, ci) => {
+      const members = (worldData.agents||[]).filter(a=>a.civ===civ.name);
+      if (members.length < 2) return;
+      const col = CIV_COLORS[ci % CIV_COLORS.length];
+      for (let i = 0; i < members.length - 1; i++) {
+        const pa = agentPositions[members[i].name];
+        const pb = agentPositions[members[i+1].name];
+        if (!pa || !pb) continue;
+        ctx.strokeStyle = col + '33'; ctx.lineWidth = 1.5 / mapZoom;
+        ctx.setLineDash([4/mapZoom, 6/mapZoom]);
+        ctx.beginPath(); ctx.moveTo(pa.x*W, pa.y*H); ctx.lineTo(pb.x*W, pb.y*H); ctx.stroke();
+        ctx.setLineDash([]);
+      }
+    });
+  }
+
+  if (mapZoom >= 3) {
+    // Agent name + mood label floating above them
+    (worldData.agents||[]).forEach(a => {
+      const pos = agentPositions[a.name];
+      if (!pos) return;
+      const px = pos.x * W, py = pos.y * H;
+      const moodColor = Object.entries(MOOD_COLORS).find(([k])=>a.mood?.toLowerCase().includes(k))?.[1]||'#a0b0c8';
+      // Name tag
+      ctx.fillStyle = 'rgba(6,8,15,.85)';
+      const name = a.name;
+      const tw = ctx.measureText(name).width + 10;
+      ctx.fillRect(px - tw/2, py - 32, tw, 14);
+      ctx.fillStyle = moodColor;
+      ctx.font = `bold ${10/mapZoom*3}px Cinzel,serif`;
+      ctx.textAlign = 'center';
+      ctx.fillText(name, px, py - 21);
+      // Mood bar
+      ctx.fillStyle = '#1a2030';
+      ctx.fillRect(px - 14, py + 16, 28, 4);
+      ctx.fillStyle = moodColor;
+      ctx.fillRect(px - 14, py + 16, 28 * (0.5 + Math.random()*0.5), 4);
+    });
+  }
+
+  if (mapZoom >= 4) {
+    // Civ capitals — small building icon
+    const civs = worldData.civilizations || [];
+    civs.forEach((civ, ci) => {
+      const center = CIV_CENTERS[ci % CIV_CENTERS.length];
+      const cx2 = center.x * W, cy2 = center.y * H;
+      const col = CIV_COLORS[ci % CIV_COLORS.length];
+      // Castle icon
+      ctx.fillStyle = col;
+      ctx.font = `${20/mapZoom*3}px serif`;
+      ctx.textAlign = 'center';
+      ctx.fillText('🏰', cx2, cy2 - 30);
+      // Capital name
+      ctx.strokeStyle = 'rgba(0,0,0,.9)'; ctx.lineWidth = 3/mapZoom;
+      ctx.font = `bold ${9/mapZoom*3}px Cinzel,serif`;
+      ctx.strokeText(civ.capital || civ.name, cx2, cy2 - 10);
+      ctx.fillStyle = '#f0d88a';
+      ctx.fillText(civ.capital || civ.name, cx2, cy2 - 10);
+    });
+  }
 
   // Relationship lines
   (worldData.agents||[]).forEach(a => {
@@ -548,9 +619,9 @@ canvas.addEventListener('wheel', e => {
   const my = (e.clientY - rect.top) / rect.height;
   const delta = e.deltaY < 0 ? 1.15 : 0.87;
   const newZoom = Math.max(1, Math.min(6, mapZoom * delta));
-  // Zoom toward mouse position
   mapPanX = mx - (mx - mapPanX) * (newZoom / mapZoom);
   mapPanY = my - (my - mapPanY) * (newZoom / mapZoom);
+  if (Math.abs(newZoom - mapZoom) > 0.25) { terrainCache=null; terrainSeed=0; }
   mapZoom = newZoom;
   clampPan();
 }, {passive: false});
@@ -614,8 +685,14 @@ zoomBtns.innerHTML = `
 `;
 document.querySelector('.map-overlay').appendChild(zoomBtns);
 
-function zoomBy(f){ mapZoom=Math.max(1,Math.min(6,mapZoom*f)); clampPan(); }
-function resetZoom(){ mapZoom=1; mapPanX=0; mapPanY=0; }
+function zoomBy(f){
+  const prev = mapZoom;
+  mapZoom=Math.max(1,Math.min(6,mapZoom*f));
+  clampPan();
+  // Invalidate terrain cache so it regenerates at new resolution
+  if (Math.abs(mapZoom - prev) > 0.3) { terrainCache=null; terrainSeed=0; }
+}
+function resetZoom(){ mapZoom=1; mapPanX=0; mapPanY=0; terrainCache=null; terrainSeed=0; }
 
 // ─── Init ─────────────────────────────────────────────────
 fetchState().then(() => {
