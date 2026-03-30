@@ -32,8 +32,8 @@ def _advance_year():
     y = _get_world_year() + 1
     set_world_state("world_year_num", str(y))
     set_world_state("world_year", f"Year {y}")
-    # Era progression
-    era_idx = min(y // 20, len(ERAS) - 1)
+    # Era progression: every 50 ticks per era (not 20)
+    era_idx = min(y // 50, len(ERAS) - 1)
     current_era = get_world_state("era", ERAS[0])
     new_era = ERAS[era_idx]
     if new_era != current_era:

@@ -147,14 +147,19 @@ def _handle(message: dict):
 
 
 def _drain_pending() -> int:
-    """On startup, skip all pending messages to avoid replaying old ones."""
+    """On startup, consume all pending updates to avoid replaying old messages."""
     try:
-        resp = requests.get(f"{API}/getUpdates", params={"offset": -1, "timeout": 0}, timeout=10)
+        # Get all pending updates with timeout=0 (non-blocking)
+        resp = requests.get(f"{API}/getUpdates", params={"timeout": 0}, timeout=10)
         updates = resp.json().get("result", [])
         if updates:
-            return updates[-1]["update_id"] + 1
-    except Exception:
-        pass
+            last_id = updates[-1]["update_id"]
+            # Acknowledge them all by setting offset past the last one
+            requests.get(f"{API}/getUpdates", params={"offset": last_id + 1, "timeout": 0}, timeout=10)
+            print(f"[bot] Drained {len(updates)} pending messages (last id: {last_id})")
+            return last_id + 1
+    except Exception as e:
+        print(f"[bot] Drain error: {e}")
     return 0
 
 def _poll_loop():

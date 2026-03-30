@@ -53,11 +53,21 @@ def cmd_start():
         except Exception as e:
             print(f"[scheduler] Tick error (world keeps running): {e}")
 
+    from datetime import datetime, timedelta
     scheduler = BlockingScheduler()
+
+    # Only run immediately if world has never ticked, otherwise wait for next interval
+    last_tick_year = int(get_world_state("world_year_num", "0"))
+    if last_tick_year == 0:
+        print("🌱 First tick — generating world...")
+        safe_tick()
+    else:
+        print(f"⏰ World at Year {last_tick_year} — next tick in {TICK_INTERVAL} min")
+
     scheduler.add_job(safe_tick, "interval", minutes=TICK_INTERVAL,
-                      misfire_grace_time=300, coalesce=True)
+                      misfire_grace_time=300, coalesce=True,
+                      next_run_time=datetime.now() + timedelta(minutes=TICK_INTERVAL))
     print("World is running. Press Ctrl+C to stop.\n")
-    safe_tick()  # run first tick immediately
     scheduler.start()
 
 
