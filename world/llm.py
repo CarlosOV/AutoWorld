@@ -21,5 +21,6 @@ def ask_llm(prompt: str, system: str = "", max_tokens: int = 500) -> str:
         json={"model": DEFAULT_MODEL, "messages": messages, "max_tokens": max_tokens},
         timeout=30,
     )
-    resp.raise_for_status()
+    if not resp.ok:
+        raise Exception(f"OpenRouter error {resp.status_code}: {resp.text}")
     return resp.json()["choices"][0]["message"]["content"].strip()
