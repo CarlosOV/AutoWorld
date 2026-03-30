@@ -28,10 +28,15 @@ TICK_INTERVAL = int(os.getenv("TICK_INTERVAL", "30"))
 def cmd_reset():
     """Wipe all world data and start fresh."""
     from world.memory import _get_conn, init_db
-    confirm = input("⚠️  This will ERASE all world data. Type YES to confirm: ").strip()
-    if confirm != "YES":
-        print("Aborted.")
-        return
+    force = "--yes" in sys.argv or "-y" in sys.argv
+    if not force:
+        try:
+            confirm = input("⚠️  This will ERASE all world data. Type YES to confirm: ").strip()
+        except EOFError:
+            confirm = ""
+        if confirm != "YES":
+            print("Aborted. Use 'python main.py reset --yes' to skip confirmation.")
+            return
     init_db()
     conn = _get_conn()
     cur = conn.cursor()
