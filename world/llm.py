@@ -23,4 +23,8 @@ def ask_llm(prompt: str, system: str = "", max_tokens: int = 500) -> str:
     )
     if not resp.ok:
         raise Exception(f"OpenRouter error {resp.status_code}: {resp.text}")
-    return resp.json()["choices"][0]["message"]["content"].strip()
+    data = resp.json()
+    content = data.get("choices", [{}])[0].get("message", {}).get("content")
+    if not content:
+        raise Exception(f"Empty response from model. Full response: {data}")
+    return content.strip()

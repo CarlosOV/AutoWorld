@@ -1,8 +1,9 @@
 from .llm import ask_llm
 from .memory import save_agent
 import json
+import time
 
-def generate_agent(world_name: str, existing_names: list[str]) -> dict:
+def generate_agent(world_name: str, existing_names: list) -> dict:
     """Generate a new agent with LLM."""
     names_str = ", ".join(existing_names) if existing_names else "ninguno"
     prompt = f"""
@@ -21,13 +22,19 @@ Responde SOLO con JSON válido, sin markdown:
   "memories": []
 }}
 """
-    raw = ask_llm(prompt, max_tokens=300)
-    # extract JSON
-    start = raw.find("{")
-    end = raw.rfind("}") + 1
-    data = json.loads(raw[start:end])
-    save_agent(data["name"], data)
-    return data
+    for attempt in range(3):
+        try:
+            raw = ask_llm(prompt, max_tokens=300)
+            start = raw.find("{")
+            end = raw.rfind("}") + 1
+            data = json.loads(raw[start:end])
+            save_agent(data["name"], data)
+            return data
+        except Exception as e:
+            print(f"[agent] Attempt {attempt+1} failed: {e}")
+            if attempt < 2:
+                time.sleep(3)
+    raise Exception("Failed to generate agent after 3 attempts")
 
 def agent_react(agent: dict, event: str, world_name: str) -> str:
     """Get agent's reaction to a world event."""
