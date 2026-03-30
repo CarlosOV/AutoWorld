@@ -21,10 +21,11 @@ def get_continent_centers(world_seed: str) -> list[dict]:
     if cached:
         return json.loads(cached)
 
-    # Simple deterministic positions from seed — no RNG chain to sync with JS
-    # JS now uses these centers directly to draw continent blobs
-    def r(i: int, lo: float, hi: float, _S=S) -> float:
-        return round(lo + _srand(_S * 3.7 + i * 1.13) * (hi - lo), 4)
+    S = abs(_hash_seed(world_seed)) % 9999 + 1
+
+    # Simple deterministic positions — JS uses these directly to draw blobs
+    def r(i: int, lo: float, hi: float) -> float:
+        return round(lo + _srand(S * 3.7 + i * 1.13) * (hi - lo), 4)
 
     centers = [
         {"x": r(0, .15, .45), "y": r(1, .15, .45)},
