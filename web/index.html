@@ -305,36 +305,44 @@ function fbm(x,y,s,oct=4){
 }
 
 function blobPath(ctx, cx, cy, r, spikes, rng){
-  // Highly irregular blob with peninsulas and bays
-  const pts=spikes||24;
-  const angles=[], radii=[];
-  // Generate random radii per vertex
-  for(let i=0;i<pts;i++){
-    angles.push((i/pts)*Math.PI*2);
-    // Mix of big variation (peninsulas/bays) + small jaggedness
-    const bigNoise=(rng()-.5)*.55;    // ±27% — creates peninsulas & bays
-    const smallNoise=(rng()-.5)*.15;  // ±7.5% — fine jaggedness
-    radii.push(r*(0.72+bigNoise+smallNoise));
+  // Generate base vertices around a circle with strong noise
+  const n=spikes||24;
+  let pts=[];
+  for(let i=0;i<n;i++){
+    const a=(i/n)*Math.PI*2;
+    // Strong radial variation: big bays and peninsulas
+    const peninsula=(rng()-.5)*.60;  // ±30%
+    const jag=(rng()-.5)*.20;        // ±10% fine detail
+    const rad=r*(0.65+peninsula+jag);
+    const stretchX=.82+rng()*.36;
+    pts.push({
+      x:cx+Math.cos(a)*rad*stretchX,
+      y:cy+Math.sin(a)*rad*(2-stretchX)*.68
+    });
   }
-  // Smooth pass — average with neighbors to soften sharp spikes
-  const smoothed=radii.map((v,i)=>{
-    const prev=radii[(i-1+pts)%pts], next=radii[(i+1)%pts];
-    return v*.55+prev*.22+next*.22;
-  });
-  // Draw with bezier curves for organic look
+  // Fractal subdivision — add midpoints with displacement (2 passes)
+  for(let pass=0;pass<2;pass++){
+    const newPts=[];
+    for(let i=0;i<pts.length;i++){
+      const p=pts[i], q=pts[(i+1)%pts.length];
+      newPts.push(p);
+      // Midpoint with perpendicular displacement
+      const mx=(p.x+q.x)/2, my=(p.y+q.y)/2;
+      const dx=q.x-p.x, dy=q.y-p.y;
+      const len=Math.sqrt(dx*dx+dy*dy);
+      const disp=(rng()-.5)*len*(pass===0?.4:.2);
+      newPts.push({x:mx+(-dy/len)*disp, y:my+(dx/len)*disp});
+    }
+    pts=newPts;
+  }
+  // Draw
   ctx.beginPath();
-  for(let i=0;i<=pts;i++){
-    const idx=i%pts, nextIdx=(i+1)%pts;
-    const a=angles[idx], rad=smoothed[idx];
-    const stretch=.85+rng()*.3; // anisotropic stretch
-    const px=cx+Math.cos(a)*rad*stretch;
-    const py=cy+Math.sin(a)*rad*(2-stretch)*.7;
-    if(i===0){ctx.moveTo(px,py);continue;}
-    // Use quadratic curve to midpoint for organic shape
-    const prevA=angles[(idx-1+pts)%pts], prevR=smoothed[(idx-1+pts)%pts];
-    const cpx=cx+Math.cos((prevA+a)/2)*(prevR+rad)/2*(.9+rng()*.2);
-    const cpy=cy+Math.sin((prevA+a)/2)*(prevR+rad)/2*(.6+rng()*.15);
-    ctx.quadraticCurveTo(cpx,cpy,px,py);
+  ctx.moveTo(pts[0].x,pts[0].y);
+  for(let i=1;i<pts.length;i++){
+    const prev=pts[i-1], curr=pts[i], next=pts[(i+1)%pts.length];
+    const cpx=(prev.x+curr.x*2+next.x)/4;
+    const cpy=(prev.y+curr.y*2+next.y)/4;
+    ctx.quadraticCurveTo(curr.x,curr.y,cpx,cpy);
   }
   ctx.closePath();
 }
