@@ -46,7 +46,8 @@ def cmd_reset():
     conn.commit()
     cur.close()
     conn.close()
-    print("✅ World wiped. Run 'python main.py start' to begin a new world.")
+    print("✅ World wiped. Starting fresh world...")
+    cmd_start()
 
 def cmd_start():
     import threading
