@@ -42,6 +42,11 @@ def cmd_start():
     t.start()
     print(f"🌐 Dashboard running at http://localhost:{web_port}")
 
+    # Launch Telegram bot in background thread
+    from world.telegram_bot import start_bot
+    start_bot()
+    print(f"🤖 Telegram bot active")
+
     scheduler = BlockingScheduler()
     scheduler.add_job(world_tick, "interval", minutes=TICK_INTERVAL)
     print("World is running. Press Ctrl+C to stop.\n")
