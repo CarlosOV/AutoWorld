@@ -2,6 +2,7 @@ from fastapi import FastAPI
 from fastapi.responses import HTMLResponse
 import sys, os
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
+import os
 from typing import Optional
 from world.memory import init_db, get_all_agents, get_recent_events, get_events, get_agent_history, get_world_state, get_event_count
 from world.world_engine import answer_question
@@ -35,6 +36,7 @@ def get_state():
         civ["latest_tech"] = techs[-1] if techs else None
 
     return {
+        "world_name": os.getenv("WORLD_NAME", "AutoWorld"),
         "era": era,
         "year": year,
         "agents": agents,

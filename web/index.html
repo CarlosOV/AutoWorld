@@ -255,7 +255,10 @@ async function fetchState() {
 }
 
 function render(d) {
-  document.getElementById('world-title').textContent = '🌍 ' + (d.era ? '' : 'AutoWorld');
+  const wname = d.world_name || 'AutoWorld';
+  window._worldName = wname;
+  document.getElementById('world-title').textContent = '🌍 ' + wname;
+  document.title = '🌍 ' + wname;
   document.getElementById('era-badge').textContent = d.era || 'Primordial Age';
   document.getElementById('era-overlay').textContent = d.era || 'The Primordial Age';
   document.getElementById('year-badge').textContent = d.year || 'Year 1';
@@ -281,6 +284,128 @@ function checkNewEvents(events) {
   }
   if (newId) lastEventId = Math.max(lastEventId, newId);
   loadEvents(true);
+}
+
+// ─── Terrain Generation (seeded, deterministic) ──────────
+let terrainCache = null;
+let terrainSeed = 0;
+
+function seededRand(seed) {
+  let s = seed;
+  return function() {
+    s = (s * 1664525 + 1013904223) & 0xffffffff;
+    return (s >>> 0) / 0xffffffff;
+  };
+}
+
+function generateTerrain(W, H, worldName) {
+  const seed = hashCode(worldName || 'world');
+  if (terrainCache && terrainSeed === seed && terrainCache.width === W) return terrainCache;
+  terrainSeed = seed;
+
+  const offscreen = document.createElement('canvas');
+  offscreen.width = W; offscreen.height = H;
+  const ctx = offscreen.getContext('2d');
+  const rng = seededRand(seed);
+
+  // Deep ocean base
+  ctx.fillStyle = '#061220'; ctx.fillRect(0,0,W,H);
+
+  // Ocean gradient
+  const ocean = ctx.createRadialGradient(W*.5,H*.6,H*.05,W*.5,H*.5,W*.8);
+  ocean.addColorStop(0,'#0d2a3a'); ocean.addColorStop(.5,'#091825'); ocean.addColorStop(1,'#050e18');
+  ctx.fillStyle = ocean; ctx.fillRect(0,0,W,H);
+
+  // Ocean shimmer lines
+  ctx.strokeStyle='#0d2a3a33'; ctx.lineWidth=1;
+  for(let i=0;i<20;i++){
+    const y = rng()*H;
+    ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(W,y); ctx.stroke();
+  }
+
+  // Land masses — several overlapping blobs
+  const landCount = 3 + Math.floor(rng()*3);
+  const landBlobs = [];
+  for(let i=0;i<landCount;i++){
+    landBlobs.push({
+      cx: .15 + rng()*.7, cy: .15 + rng()*.7,
+      rx: W*(.15+rng()*.2), ry: H*(.12+rng()*.18),
+      angle: rng()*Math.PI
+    });
+  }
+
+  // Draw land shadows first
+  landBlobs.forEach(b => {
+    ctx.save(); ctx.translate(b.cx*W+4, b.cy*H+6);
+    ctx.rotate(b.angle); ctx.scale(1,.7);
+    const g = ctx.createRadialGradient(0,0,0,0,0,Math.max(b.rx,b.ry));
+    g.addColorStop(0,'#00000055'); g.addColorStop(1,'transparent');
+    ctx.fillStyle=g; ctx.beginPath(); ctx.ellipse(0,0,b.rx,b.ry,0,0,Math.PI*2); ctx.fill();
+    ctx.restore();
+  });
+
+  // Draw land
+  landBlobs.forEach(b => {
+    ctx.save(); ctx.translate(b.cx*W, b.cy*H); ctx.rotate(b.angle); ctx.scale(1,.75);
+    // Shore (sand/beach)
+    const shore = ctx.createRadialGradient(0,0,Math.max(b.rx,b.ry)*.3,0,0,Math.max(b.rx,b.ry)*1.05);
+    shore.addColorStop(0,'#2a3a1a'); shore.addColorStop(.7,'#1e3015'); shore.addColorStop(.88,'#2a3820'); shore.addColorStop(.94,'#4a3a20'); shore.addColorStop(1,'#1a2a0f00');
+    ctx.fillStyle=shore; ctx.beginPath(); ctx.ellipse(0,0,b.rx*1.05,b.ry*1.05,0,0,Math.PI*2); ctx.fill();
+    ctx.restore();
+  });
+
+  // Forests — dark green clusters on land
+  landBlobs.forEach(b => {
+    const rng2 = seededRand(hashCode(b.cx+'f'));
+    const forestCount = 6 + Math.floor(rng2()*10);
+    for(let f=0;f<forestCount;f++){
+      const angle = rng2()*Math.PI*2;
+      const dist  = rng2() * Math.min(b.rx,b.ry) * .7;
+      const fx = b.cx*W + Math.cos(angle)*dist;
+      const fy = b.cy*H + Math.sin(angle)*dist*.7;
+      const fr = 8 + rng2()*25;
+      const g = ctx.createRadialGradient(fx,fy,0,fx,fy,fr);
+      g.addColorStop(0,'#1a4020cc'); g.addColorStop(.5,'#143018aa'); g.addColorStop(1,'transparent');
+      ctx.fillStyle=g; ctx.beginPath(); ctx.arc(fx,fy,fr,0,Math.PI*2); ctx.fill();
+    }
+  });
+
+  // Mountains — jagged peaks on land
+  landBlobs.forEach(b => {
+    const rng3 = seededRand(hashCode(b.cy+'m'));
+    const mtCount = 2 + Math.floor(rng3()*4);
+    for(let m=0;m<mtCount;m++){
+      const angle = rng3()*Math.PI*2;
+      const dist  = rng3() * Math.min(b.rx,b.ry) * .5;
+      const mx = b.cx*W + Math.cos(angle)*dist;
+      const my = b.cy*H + Math.sin(angle)*dist*.6;
+      const mh = 12 + rng3()*20;
+      const mw = mh * (.4 + rng3()*.4);
+      // Mountain triangle
+      ctx.fillStyle='#3a3a3a88';
+      ctx.beginPath(); ctx.moveTo(mx,my); ctx.lineTo(mx-mw,my+mh); ctx.lineTo(mx+mw,my+mh); ctx.closePath(); ctx.fill();
+      // Snow cap
+      ctx.fillStyle='#ffffffaa';
+      ctx.beginPath(); ctx.moveTo(mx,my); ctx.lineTo(mx-mw*.3,my+mh*.35); ctx.lineTo(mx+mw*.3,my+mh*.35); ctx.closePath(); ctx.fill();
+    }
+  });
+
+  // Rivers — thin curving lines from land to sea
+  landBlobs.forEach(b => {
+    const rng4 = seededRand(hashCode(b.cx+'r'));
+    if (rng4() > .6) return;
+    const sx = b.cx*W + (rng4()-.5)*b.rx;
+    const sy = b.cy*H + (rng4()-.5)*b.ry*.5;
+    const ex = sx + (rng4()-.5)*b.rx*.8;
+    const ey = sy + b.ry * (.5+rng4()*.5);
+    const cpx = (sx+ex)/2 + (rng4()-.5)*60;
+    const cpy = (sy+ey)/2;
+    ctx.strokeStyle='#1a4a6a55'; ctx.lineWidth=1.5;
+    ctx.beginPath(); ctx.moveTo(sx,sy); ctx.quadraticCurveTo(cpx,cpy,ex,ey); ctx.stroke();
+  });
+
+  terrainCache = offscreen;
+  return offscreen;
 }
 
 // ─── World Map ────────────────────────────────────────────
@@ -316,24 +441,14 @@ function drawMap() {
   canvas.width = W; canvas.height = H;
   const ctx = canvas.getContext('2d');
 
-  // Background — dark parchment-like terrain
-  const bg = ctx.createRadialGradient(W*.5,H*.5,0,W*.5,H*.5,W*.7);
-  bg.addColorStop(0,'#0a1020'); bg.addColorStop(.6,'#07090f'); bg.addColorStop(1,'#050608');
-  ctx.fillStyle = bg; ctx.fillRect(0,0,W,H);
+  // Draw terrain (seeded from world name stored in page title)
+  const terrain = generateTerrain(W, H, window._worldName || 'Inkari');
+  ctx.drawImage(terrain, 0, 0, W, H);
 
-  // Subtle terrain noise
-  for(let i=0;i<80;i++){
-    const x=Math.random()*W, y=Math.random()*H, r=Math.random()*60+20;
-    const g=ctx.createRadialGradient(x,y,0,x,y,r);
-    g.addColorStop(0,'#0d1525' + (Math.random()>.5?'20':'10'));
-    g.addColorStop(1,'transparent');
-    ctx.fillStyle=g; ctx.fillRect(x-r,y-r,r*2,r*2);
-  }
-
-  // Grid (faint)
-  ctx.strokeStyle='#0d1a2e'; ctx.lineWidth=0.4;
-  for(let x=0;x<W;x+=60){ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,H);ctx.stroke()}
-  for(let y=0;y<H;y+=60){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(W,y);ctx.stroke()}
+  // Vignette
+  const vig = ctx.createRadialGradient(W/2,H/2,H*.3,W/2,H/2,W*.8);
+  vig.addColorStop(0,'transparent'); vig.addColorStop(1,'#00000088');
+  ctx.fillStyle=vig; ctx.fillRect(0,0,W,H);
 
   // Civilization territories
   const civs = worldData.civilizations || [];
