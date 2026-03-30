@@ -1,4 +1,4 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, Header, HTTPException
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 import sys, os
@@ -94,16 +94,23 @@ def tech_summary():
     civs = json.loads(get_world_state("civilizations", "[]"))
     return [get_civ_tech_summary(c["name"]) for c in civs]
 
+def _require_admin(x_admin_key: str = Header(default="")):
+    admin_key = os.getenv("ADMIN_KEY", "")
+    if not admin_key or x_admin_key != admin_key:
+        raise HTTPException(status_code=403, detail="Forbidden")
+
 @app.post("/api/reset-terrain-cache")
-def reset_terrain_cache():
-    """Clear cached continent centers so they regenerate with correct RNG on next request."""
+def reset_terrain_cache(x_admin_key: str = Header(default="")):
+    """Clear cached continent centers — requires X-Admin-Key header."""
+    _require_admin(x_admin_key)
     from world.memory import set_world_state
     set_world_state("continent_centers", "")
     return {"status": "cleared"}
 
 @app.post("/api/reset-positions")
-def reset_positions():
+def reset_positions(x_admin_key: str = Header(default="")):
     """Re-assign all agent positions to their civilization's continent."""
+    _require_admin(x_admin_key)
     try:
         from world.drama import ensure_positions
         import json
