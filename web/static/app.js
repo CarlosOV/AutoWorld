@@ -148,7 +148,7 @@ function generateTerrain(W, H, worldName) {
   // Each continent: deep base (dark green) → lowland → forest interior
   // Use CIV_CENTERS from API as authoritative continent positions
   // This guarantees agents are always on land — no RNG sync needed
-  const baseSizes = [.18,.13,.09,.06,.05,.03,.025];
+  const baseSizes = [.22,.16,.11,.08,.07,.05,.04];
   const baseSpikes = [32,28,22,18,16,12,10];
   const continents = CIV_CENTERS.map((c, i) => ({
     cx: c.x * W,
@@ -259,17 +259,18 @@ function updateAgentPositions(agents) {
     const color = civIdx>=0 ? CIV_COLORS[civIdx % CIV_COLORS.length] : '#607080';
     const emoji = AGENT_EMOJIS[Math.abs(hashCode(a.name)) % AGENT_EMOJIS.length];
 
-    // Target: near civ center (with personal offset) or random if no civ
+    // Use backend positions (always on land) — fallback to civ center if missing
     let tx, ty;
-    if (civIdx >= 0) {
+    if (typeof a.x === 'number' && typeof a.y === 'number') {
+      tx = a.x;
+      ty = a.y;
+    } else if (civIdx >= 0) {
       const center = CIV_CENTERS[civIdx % CIV_CENTERS.length];
-      const offsetX = ((hashCode(a.name) % 200) - 100) / 1000;
-      const offsetY = ((hashCode(a.name+'y') % 200) - 100) / 1000;
-      tx = Math.max(0.05, Math.min(0.95, center.x + offsetX));
-      ty = Math.max(0.05, Math.min(0.95, center.y + offsetY));
+      tx = center.x;
+      ty = center.y;
     } else {
-      tx = typeof a.x==='number' ? a.x : 0.1 + (Math.abs(hashCode(a.name))%800)/1000;
-      ty = typeof a.y==='number' ? a.y : 0.1 + (Math.abs(hashCode(a.name+'y'))%800)/1000;
+      tx = 0.1 + (Math.abs(hashCode(a.name))%800)/1000;
+      ty = 0.1 + (Math.abs(hashCode(a.name+'y'))%800)/1000;
     }
 
     if (!agentPositions[key]) {

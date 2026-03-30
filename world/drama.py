@@ -33,7 +33,7 @@ def ensure_positions(agents: list, civilizations: list = None) -> tuple:
             civ_index = next((j for j, c in enumerate(civs) if c.get("name") == a.get("civ")), i % len(centers))
             center = centers[civ_index % len(centers)]
             x, y = nearest_land_position(center["x"], center["y"], centers,
-                                          spread=0.07, agent_index=i)
+                                          spread=0.04, agent_index=i)
             a["x"] = x
             a["y"] = y
             changed = True
@@ -50,13 +50,13 @@ def move_agents(agents: list, civilizations: list = None) -> list:
         center = centers[civ_index % len(centers)]
 
         # Small drift around current position, clamped to continent area
-        dx = random.uniform(-0.025, 0.025)
-        dy = random.uniform(-0.020, 0.020)
+        dx = random.uniform(-0.015, 0.015)
+        dy = random.uniform(-0.012, 0.012)
         new_x = a.get("x", center["x"]) + dx
         new_y = a.get("y", center["y"]) + dy
 
         # Pull back toward continent center if drifting too far (land boundary)
-        spread = 0.12
+        spread = 0.06
         dist_x = new_x - center["x"]
         dist_y = new_y - center["y"]
         dist = (dist_x**2 + (dist_y/0.7)**2) ** 0.5
