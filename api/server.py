@@ -103,12 +103,19 @@ def reset_terrain_cache():
 
 @app.post("/api/reset-positions")
 def reset_positions():
-    """Clear stored agent positions so they re-snap to correct CIV_CENTERS."""
+    """Re-assign all agent positions to their civilization's continent."""
+    from world.drama import ensure_positions
+    import json
     agents = get_all_agents()
+    civs = json.loads(get_world_state("civilizations", "[]"))
+    # Clear positions first
     for a in agents:
-        a.pop("x", None); a.pop("y", None)
+        a["x"] = None; a["y"] = None
+    # Re-assign using terrain centers
+    agents, _ = ensure_positions(agents, civs)
+    for a in agents:
         save_agent(a["name"], a)
-    return {"reset": len(agents)}
+    return {"reset": len(agents), "sample": {"name": agents[0]["name"], "x": agents[0].get("x"), "y": agents[0].get("y")} if agents else {}}
 
 @app.get("/", response_class=HTMLResponse)
 def dashboard():

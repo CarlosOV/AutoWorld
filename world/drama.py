@@ -29,7 +29,7 @@ def ensure_positions(agents: list, civilizations: list = None) -> tuple:
     changed = False
 
     for i, a in enumerate(agents):
-        if "x" not in a or "y" not in a:
+        if "x" not in a or "y" not in a or a.get("x") is None or a.get("y") is None:
             civ_index = next((j for j, c in enumerate(civs) if c.get("name") == a.get("civ")), i % len(centers))
             center = centers[civ_index % len(centers)]
             x, y = nearest_land_position(center["x"], center["y"], centers,
