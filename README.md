@@ -1,5 +1,7 @@
 # 🌍 AutoWorld — Autonomous AI Living World
 
+**🔴 Live Demo → [autoworld.painpointfinder.com](https://autoworld.painpointfinder.com/)**
+
 An open-source, self-hosted autonomous world simulation powered by LLMs via OpenRouter (free tier).
 
 ## What is this?
