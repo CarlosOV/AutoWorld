@@ -29,10 +29,24 @@ def ensure_positions(agents: list, civilizations: list = None) -> tuple:
     changed = False
 
     for i, a in enumerate(agents):
-        if "x" not in a or "y" not in a or a.get("x") is None or a.get("y") is None:
-            civ_index = next((j for j, c in enumerate(civs) if c.get("name") == a.get("civ")), i % len(centers))
-            center = centers[civ_index % len(centers)]
-            x, y = nearest_land_position(center["x"], center["y"], centers,
+        civ_index = next((j for j, c in enumerate(civs) if c.get("name") == a.get("civ")), i % len(centers))
+        home = centers[civ_index % len(centers)]
+        needs_pos = (
+            "x" not in a or "y" not in a
+            or a.get("x") is None or a.get("y") is None
+        )
+        if not needs_pos:
+            # Also fix agents stranded in the sea (too far from ALL continent centers)
+            ax, ay = a.get("x", 0), a.get("y", 0)
+            min_dist = min(
+                ((ax - c["x"])**2 + (ay - c["y"])**2)**0.5
+                for c in centers
+            )
+            # If farther than blob radius from nearest continent, snap back home
+            if min_dist > 0.18 and a.get("movement_mode") != "expedition":
+                needs_pos = True
+        if needs_pos:
+            x, y = nearest_land_position(home["x"], home["y"], centers,
                                           spread=0.04, agent_index=i)
             a["x"] = x
             a["y"] = y

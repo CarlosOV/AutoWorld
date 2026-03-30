@@ -682,9 +682,10 @@ canvas.addEventListener('touchmove', e => {
 canvas.addEventListener('touchend', () => { isPanning = false; }, {passive:true});
 
 function clampPan() {
-  const maxPan = (mapZoom - 1) / mapZoom;
-  mapPanX = Math.max(-maxPan, Math.min(0, mapPanX));
-  mapPanY = Math.max(-maxPan, Math.min(0, mapPanY));
+  const maxPanX = mapZoom - 1;
+  const maxPanY = mapZoom - 1;
+  mapPanX = Math.max(-maxPanX, Math.min(0, mapPanX));
+  mapPanY = Math.max(-maxPanY, Math.min(0, mapPanY));
 }
 
 // Add zoom buttons to overlay
