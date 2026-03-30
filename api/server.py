@@ -7,6 +7,7 @@ import os
 from typing import Optional
 from world.memory import init_db, get_all_agents, get_recent_events, get_events, get_agent_history, get_world_state, get_event_count, ensure_world_seed, save_agent
 from world.terrain import get_continent_centers
+from world.economy import get_economy_summary
 from world.world_engine import answer_question
 from world.tech_tree import get_all_discoveries, get_civ_tech_summary, _tier_name, _get_civ_tier, _get_discovered
 import json
@@ -45,6 +46,7 @@ def get_state():
         "world_name": os.getenv("WORLD_NAME", "AutoWorld"),
         "world_seed": ensure_world_seed(),
         "continent_centers": get_continent_centers(ensure_world_seed()),
+        "economy": get_economy_summary(json.loads(get_world_state("civilizations", "[]"))),
         "era": era,
         "year": year,
         "agents": agents,

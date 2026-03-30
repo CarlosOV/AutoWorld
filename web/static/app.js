@@ -48,6 +48,7 @@ function render(d) {
   drawMap();
   renderAgents(d.agents || []);
   renderCivs(d.civilizations || [], d.discoveries || {});
+  renderEconomy(d.economy || []);
   updateTicker(d.events || []);
 }
 
@@ -710,3 +711,33 @@ fetchState().then(() => {
 });
 setInterval(fetchState, 30000);
 loadEvents(true);
+// ─── Economy Tab ──────────────────────────────────────────
+function renderEconomy(economy) {
+  const el = document.getElementById('economy-list');
+  if (!el || !economy.length) return;
+  const RESOURCE_ICONS = {food:'🌾', materials:'⚒️', wealth:'💰', knowledge:'📚', influence:'👑'};
+  el.innerHTML = economy.map(e => {
+    const maxVal = Math.max(...Object.values(e.resources), 1);
+    const bars = Object.entries(e.resources).map(([res, val]) => {
+      const pct = Math.round((val / Math.max(maxVal, 200)) * 100);
+      return `<div style="margin:3px 0">
+        <div style="display:flex;justify-content:space-between;font-size:.7rem;color:var(--text3);margin-bottom:2px">
+          <span>${RESOURCE_ICONS[res]||'•'} ${res}</span><span>${val}</span>
+        </div>
+        <div style="background:#0d1525;border-radius:2px;height:5px">
+          <div style="height:5px;border-radius:2px;background:var(--gold);width:${Math.min(pct,100)}%;transition:width .5s"></div>
+        </div>
+      </div>`;
+    }).join('');
+    const partners = e.trade_partners?.length
+      ? `<div style="font-size:.68rem;color:var(--text3);margin-top:6px">🤝 Trading with: ${e.trade_partners.join(', ')}</div>` : '';
+    return `<div class="agent-card" style="margin-bottom:10px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+        <span style="font-family:'Cinzel',serif;font-size:.8rem;color:var(--gold)">${e.civ}</span>
+        <span style="font-size:.68rem;color:var(--text3);border:1px solid var(--border2);padding:1px 6px;border-radius:2px">${e.model}</span>
+      </div>
+      <div style="font-size:.72rem;color:var(--blue2);margin-bottom:6px">GDP: <strong>${e.gdp.toLocaleString()}</strong></div>
+      ${bars}${partners}
+    </div>`;
+  }).join('');
+}

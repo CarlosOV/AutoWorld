@@ -25,6 +25,24 @@ NUM_AGENTS = int(os.getenv("NUM_AGENTS", "5"))
 TICK_INTERVAL = int(os.getenv("TICK_INTERVAL", "30"))
 
 
+def cmd_reset():
+    """Wipe all world data and start fresh."""
+    from world.memory import get_db_conn, init_db
+    import os
+    confirm = input("⚠️  This will ERASE all world data. Type YES to confirm: ").strip()
+    if confirm != "YES":
+        print("Aborted.")
+        return
+    init_db()
+    conn = get_db_conn()
+    cur = conn.cursor()
+    for table in ("agents", "events", "world_state"):
+        cur.execute(f"DELETE FROM {table}")
+    conn.commit()
+    cur.close()
+    conn.close()
+    print("✅ World wiped. Run 'python main.py start' to begin a new world.")
+
 def cmd_start():
     import threading
     import uvicorn
@@ -158,5 +176,7 @@ if __name__ == "__main__":
         cmd_add_agent()
     elif args[0] == "tech":
         cmd_tech()
+    elif args[0] == "reset":
+        cmd_reset()
     else:
         print(__doc__)

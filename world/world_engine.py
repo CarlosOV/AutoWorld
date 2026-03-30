@@ -8,6 +8,7 @@ from .notifier import notify
 from .tech_tree import maybe_discover, get_all_discoveries, get_civ_tech_summary
 from .context_manager import get_world_context, get_deep_context, trim_agent_memories, maybe_compress_lore
 from .drama import ensure_positions, move_agents, maybe_gossip, maybe_secondary_story
+from .economy import tick_economy
 
 WORLD_NAME = os.getenv("WORLD_NAME", "Aethoria")
 NUM_AGENTS = int(os.getenv("NUM_AGENTS", "5"))
@@ -227,17 +228,20 @@ Generate ONE interesting event happening right now. 2-3 sentences. No JSON.
 
     # Move agents on the map
     agents = get_all_agents()
-    agents, pos_changed = ensure_positions(agents)
-    agents = move_agents(agents)
+    civs = _get_civilizations()
+    agents, pos_changed = ensure_positions(agents, civs)
+    agents = move_agents(agents, civs)
     for a in agents:
         save_agent(a["name"], a)
+
+    # Economy tick
+    tick_economy(agents, civs, year)
 
     # Gossip & secondary stories
     maybe_gossip(agents, year)
     maybe_secondary_story(agents, year)
 
     # Tech discoveries
-    civs = _get_civilizations()
     if civs:
         maybe_discover(civs, WORLD_NAME, year)
         _save_civilizations(civs)  # save updated power levels
