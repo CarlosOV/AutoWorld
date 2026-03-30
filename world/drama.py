@@ -39,34 +39,72 @@ def ensure_positions(agents: list, civilizations: list = None) -> tuple:
             changed = True
     return agents, changed
 
+MOVEMENT_MODES = ["settled", "settled", "settled", "wandering", "expedition"]
+# settled = stay near home (most common)
+# wandering = drift a bit more than normal
+# expedition = travel far, possibly cross-ocean
+
 def move_agents(agents: list, civilizations: list = None) -> list:
-    """Move agents each tick — they wander near their civilization's continent."""
+    """
+    Move agents each tick with narrative purpose.
+    Movement modes: settled (home), wandering, expedition (far travel).
+    Wars, betrayals, and events can trigger mode changes.
+    """
     world_seed = get_world_state("world_seed", "default")
     centers = get_continent_centers(world_seed)
     civs = civilizations or []
 
     for i, a in enumerate(agents):
         civ_index = next((j for j, c in enumerate(civs) if c.get("name") == a.get("civ")), i % len(centers))
-        center = centers[civ_index % len(centers)]
+        home = centers[civ_index % len(centers)]
+        mode = a.get("movement_mode", "settled")
 
-        # Small drift around current position, clamped to continent area
-        dx = random.uniform(-0.015, 0.015)
-        dy = random.uniform(-0.012, 0.012)
-        new_x = a.get("x", center["x"]) + dx
-        new_y = a.get("y", center["y"]) + dy
+        cx = a.get("x", home["x"])
+        cy = a.get("y", home["y"])
 
-        # Pull back toward continent center if drifting too far (land boundary)
-        spread = 0.06
-        dist_x = new_x - center["x"]
-        dist_y = new_y - center["y"]
-        dist = (dist_x**2 + (dist_y/0.7)**2) ** 0.5
-        if dist > spread:
-            pull = 0.3
-            new_x = new_x - dist_x * pull
-            new_y = new_y - dist_y * pull
+        if mode == "expedition":
+            # Heading toward a destination continent
+            dest_idx = a.get("expedition_target", (civ_index + 1) % len(centers))
+            dest = centers[dest_idx % len(centers)]
+            # Move steadily toward destination
+            dx = (dest["x"] - cx) * 0.12 + random.uniform(-0.01, 0.01)
+            dy = (dest["y"] - cy) * 0.12 + random.uniform(-0.01, 0.01)
+            # If arrived, end expedition
+            dist_to_dest = ((cx - dest["x"])**2 + (cy - dest["y"])**2) ** 0.5
+            if dist_to_dest < 0.05:
+                a["movement_mode"] = "settled"
+                log_event("expedition", f"🚢 {a['name']} arrived at a distant land after a long expedition.", [a["name"]])
 
-        a["x"] = round(max(0.03, min(0.97, new_x)), 3)
-        a["y"] = round(max(0.03, min(0.97, new_y)), 3)
+        elif mode == "wandering":
+            # Larger drift, still loosely tied to home continent
+            dx = random.uniform(-0.03, 0.03)
+            dy = random.uniform(-0.025, 0.025)
+            # Soft pull toward home if too far
+            dist_home = ((cx - home["x"])**2 + (cy - home["y"])**2) ** 0.5
+            if dist_home > 0.14:
+                dx += (home["x"] - cx) * 0.15
+                dy += (home["y"] - cy) * 0.15
+
+        else:  # settled
+            # Small daily movement, strongly bound to home continent
+            dx = random.uniform(-0.012, 0.012)
+            dy = random.uniform(-0.010, 0.010)
+            dist_home = ((cx - home["x"])**2 + (cy - home["y"])**2) ** 0.5
+            if dist_home > 0.07:
+                dx += (home["x"] - cx) * 0.25
+                dy += (home["y"] - cy) * 0.25
+
+        a["x"] = round(max(0.02, min(0.98, cx + dx)), 3)
+        a["y"] = round(max(0.02, min(0.98, cy + dy)), 3)
+
+        # Small chance to start an expedition (narrative-driven)
+        if mode == "settled" and random.random() < 0.03:
+            other_civs = [j for j in range(len(centers)) if j != civ_index]
+            if other_civs:
+                a["movement_mode"] = "expedition"
+                a["expedition_target"] = random.choice(other_civs)
+                log_event("expedition", f"⛵ {a['name']} sets sail on an expedition to distant lands.", [a["name"]])
+
     return agents
 
 DRAMA_EVENTS = [

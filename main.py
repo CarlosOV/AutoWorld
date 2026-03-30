@@ -3,6 +3,7 @@
 AutoWorld — Autonomous AI Living World
 Usage:
   python main.py start          # start world + web dashboard
+  python main.py reset          # wipe world and start fresh (new seed + terrain)
   python main.py tick           # run one tick manually
   python main.py ask "question" # ask the world narrator
   python main.py status         # show agents + recent events
@@ -26,7 +27,7 @@ TICK_INTERVAL = int(os.getenv("TICK_INTERVAL", "30"))
 
 
 def cmd_reset():
-    """Wipe all world data and start fresh."""
+    """Wipe all world data and start a brand new world with a fresh seed and terrain."""
     from world.memory import _get_conn, init_db
     force = "--yes" in sys.argv or "-y" in sys.argv
     if not force:
@@ -36,7 +37,6 @@ def cmd_reset():
                 print("Aborted.")
                 return
         except EOFError:
-            # No TTY (container) — proceed automatically
             print("No TTY detected — proceeding with reset.")
     init_db()
     conn = _get_conn()
@@ -46,8 +46,45 @@ def cmd_reset():
     conn.commit()
     cur.close()
     conn.close()
-    print("✅ World wiped. Starting fresh world...")
+    print("✅ World wiped.")
+    _bootstrap_world()
     cmd_start()
+
+
+def _bootstrap_world():
+    """
+    Full world creation sequence — only called on first start or after reset.
+    Order matters: seed → terrain → agents → positions.
+    """
+    import random, json
+    from world.memory import set_world_state, ensure_world_seed
+    from world.terrain import get_continent_centers
+    from world.drama import ensure_positions
+
+    # 1. Generate unique seed
+    seed = str(random.randint(100000, 999999))
+    set_world_state("world_seed", seed)
+    print(f"🌱 World seed: {seed}")
+
+    # 2. Generate terrain centers (stored in DB, used by frontend to draw land)
+    centers = get_continent_centers(seed)
+    print(f"🗺️  Terrain generated — {len(centers)} continents")
+
+    # 3. Generate agents
+    print(f"👥 Generating {NUM_AGENTS} inhabitants...")
+    for _ in range(NUM_AGENTS):
+        existing = [a["name"] for a in get_all_agents()]
+        a = generate_agent(WORLD_NAME, existing)
+        print(f"   ✨ {a['name']} ({a.get('occupation','?')})")
+
+    # 4. Assign positions on land (no civs yet — spread across continents evenly)
+    agents = get_all_agents()
+    civs = json.loads(get_world_state("civilizations", "[]"))
+    agents, _ = ensure_positions(agents, civs)
+    from world.memory import save_agent
+    for a in agents:
+        save_agent(a["name"], a)
+    print(f"📍 All agents placed on land.")
 
 def cmd_start():
     import threading
@@ -158,25 +195,9 @@ def _ensure_agents():
     agents = get_all_agents()
     if agents:
         print(f"✅ World loaded: {len(agents)} existing inhabitants, resuming...")
-        return  # never overwrite existing world data
-
-    # Only generate if truly empty (first run)
-    print(f"🌱 First run — generating {NUM_AGENTS} initial inhabitants...")
-    for _ in range(NUM_AGENTS):
-        existing = [a["name"] for a in get_all_agents()]
-        a = generate_agent(WORLD_NAME, existing)
-        print(f"  ✨ {a['name']} ({a.get('occupation','?')})")
-
-    # Assign positions immediately so agents appear on land from the start
-    from world.drama import ensure_positions
-    import json
-    from world.memory import get_world_state
-    all_agents = get_all_agents()
-    civs = json.loads(get_world_state("civilizations", "[]"))
-    all_agents, _ = ensure_positions(all_agents, civs)
-    for a in all_agents:
-        save_agent(a["name"], a)
-    print("📍 Agent positions assigned.")
+        return
+    # First run — bootstrap full world
+    _bootstrap_world()
 
 
 if __name__ == "__main__":

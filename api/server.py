@@ -1,11 +1,11 @@
-from fastapi import FastAPI, Header, HTTPException
+from fastapi import FastAPI
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 import sys, os
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 import os
 from typing import Optional
-from world.memory import init_db, get_all_agents, get_recent_events, get_events, get_agent_history, get_world_state, get_event_count, ensure_world_seed, save_agent
+from world.memory import init_db, get_all_agents, get_recent_events, get_events, get_agent_history, get_world_state, get_event_count, ensure_world_seed
 from world.terrain import get_continent_centers
 from world.economy import get_economy_summary
 from world.world_engine import answer_question
@@ -94,37 +94,6 @@ def tech_summary():
     civs = json.loads(get_world_state("civilizations", "[]"))
     return [get_civ_tech_summary(c["name"]) for c in civs]
 
-def _require_admin(x_admin_key: str = Header(default="")):
-    admin_key = os.getenv("ADMIN_KEY", "")
-    if not admin_key or x_admin_key != admin_key:
-        raise HTTPException(status_code=403, detail="Forbidden")
-
-@app.post("/api/reset-terrain-cache")
-def reset_terrain_cache(x_admin_key: str = Header(default="")):
-    """Clear cached continent centers — requires X-Admin-Key header."""
-    _require_admin(x_admin_key)
-    from world.memory import set_world_state
-    set_world_state("continent_centers", "")
-    return {"status": "cleared"}
-
-@app.post("/api/reset-positions")
-def reset_positions(x_admin_key: str = Header(default="")):
-    """Re-assign all agent positions to their civilization's continent."""
-    _require_admin(x_admin_key)
-    try:
-        from world.drama import ensure_positions
-        import json
-        agents = get_all_agents()
-        civs = json.loads(get_world_state("civilizations", "[]"))
-        for a in agents:
-            a["x"] = None; a["y"] = None
-        agents, _ = ensure_positions(agents, civs)
-        for a in agents:
-            save_agent(a["name"], a)
-        return {"reset": len(agents), "sample": {"name": agents[0]["name"], "x": agents[0].get("x"), "y": agents[0].get("y")} if agents else {}}
-    except Exception as e:
-        import traceback
-        return {"error": str(e), "trace": traceback.format_exc()}
 
 @app.get("/", response_class=HTMLResponse)
 def dashboard():
