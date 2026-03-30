@@ -7,6 +7,7 @@ from .agent import agent_react, generate_agent
 from .notifier import notify
 from .tech_tree import maybe_discover, get_all_discoveries, get_civ_tech_summary
 from .context_manager import get_world_context, get_deep_context, trim_agent_memories, maybe_compress_lore
+from .drama import ensure_positions, move_agents, maybe_gossip, maybe_secondary_story
 
 WORLD_NAME = os.getenv("WORLD_NAME", "Aethoria")
 NUM_AGENTS = int(os.getenv("NUM_AGENTS", "5"))
@@ -15,15 +16,7 @@ EPIC_KEYWORDS = ["guerra", "war", "muerte", "death", "catástrofe", "revolución
                  "traición", "milagro", "descubrimiento", "batalla", "battle",
                  "conquista", "extinción", "renaissance", "apocalipsis"]
 
-ERAS = [
-    "Primordial Age",
-    "Age of Tribes",
-    "Age of Cities",
-    "Age of Empires",
-    "Age of Enlightenment",
-    "Age of Machines",
-    "Age of Stars",
-]
+ERAS_PER_TICKS = 100  # ticks per era
 
 def _get_world_year() -> int:
     return int(get_world_state("world_year_num", "1"))
@@ -32,15 +25,37 @@ def _advance_year():
     y = _get_world_year() + 1
     set_world_state("world_year_num", str(y))
     set_world_state("world_year", f"Year {y}")
-    # Era progression: every 50 ticks per era (not 20)
-    era_idx = min(y // 50, len(ERAS) - 1)
-    current_era = get_world_state("era", ERAS[0])
-    new_era = ERAS[era_idx]
-    if new_era != current_era:
-        set_world_state("era", new_era)
-        log_event("era_change", f"🌅 A new era dawns: {new_era}!", [])
-        notify(f"🌅 *{WORLD_NAME}* enters a new era: *{new_era}*!")
+    # Era progression: every 100 ticks, generate a new era name dynamically
+    if y > 0 and y % ERAS_PER_TICKS == 0:
+        _generate_new_era(y)
     return y
+
+def _generate_new_era(year: int):
+    """Ask the LLM to name the new era based on what happened."""
+    from .context_manager import get_world_context
+    ctx = get_world_context()
+    civs = _get_civilizations()
+    civs_str = ", ".join(c["name"] for c in civs) if civs else "none"
+    current_era = get_world_state("era", "The Primordial Age")
+
+    prompt = f"""
+World: {WORLD_NAME} | Year {year}
+Previous era: {current_era}
+Civilizations: {civs_str}
+Recent lore: {ctx['lore'] or ctx['recent']}
+
+A new era is beginning. Give it a dramatic, poetic name (4-6 words max).
+Examples: "The Age of Burning Skies", "Era of the Shattered Crown", "The Long Silence"
+Respond with ONLY the era name, nothing else.
+"""
+    try:
+        new_era = ask_llm(prompt, max_tokens=30).strip().strip('"').strip("'")
+        set_world_state("era", new_era)
+        log_event("era_change", f"🌅 A new era begins: *{new_era}*", [])
+        notify(f"🌅 *{WORLD_NAME}* — New Era: *{new_era}*")
+        print(f"[era] New era: {new_era}")
+    except Exception as e:
+        print(f"[era] Could not generate era name: {e}")
 
 def _get_civilizations() -> list:
     raw = get_world_state("civilizations", "[]")
@@ -207,6 +222,17 @@ Generate ONE interesting event happening right now. 2-3 sentences. No JSON.
         agent["memories"] = agent.get("memories", []) + [f"Year {year}: {event_desc[:80]}"]
         agent = trim_agent_memories(agent)
         save_agent(agent["name"], agent)
+
+    # Move agents on the map
+    agents = get_all_agents()
+    agents, pos_changed = ensure_positions(agents)
+    agents = move_agents(agents)
+    for a in agents:
+        save_agent(a["name"], a)
+
+    # Gossip & secondary stories
+    maybe_gossip(agents, year)
+    maybe_secondary_story(agents, year)
 
     # Tech discoveries
     civs = _get_civilizations()
