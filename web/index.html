@@ -314,104 +314,122 @@ function fbm(x, y, seed, oct=6) {
 function generateTerrain(W, H, worldName) {
   const S = Math.abs(hashCode(worldName||'world')) % 9999 + 1;
   if (terrainCache && terrainSeed===S && terrainCache.width===W) return terrainCache;
-  terrainSeed = S;
+  terrainSeed = S; terrainCache = null;
 
   const off = document.createElement('canvas');
   off.width=W; off.height=H;
   const ctx = off.getContext('2d');
   const img = ctx.createImageData(W,H);
   const d = img.data;
+  function lC(a,b,t){t=Math.max(0,Math.min(1,t));return[a[0]+(b[0]-a[0])*t,a[1]+(b[1]-a[1])*t,a[2]+(b[2]-a[2])*t]}
 
-  function lC(a,b,t){return[a[0]+(b[0]-a[0])*t, a[1]+(b[1]-a[1])*t, a[2]+(b[2]-a[2])*t]}
+  // Fantasy map palette
+  const B={
+    dSea:[10,25,55], sea:[18,48,88], shallow:[28,75,110],
+    sand:[190,170,110], grass:[90,128,55], forest:[52,92,38],
+    hill:[118,102,70], rock:[130,118,100], snow:[222,224,230]
+  };
 
-  // Biomes — mapa de fantasía tipo parchment
-  const B={dSea:[8,22,50],sea:[14,42,82],shallow:[22,68,105],sand:[195,175,115],grass:[88,125,58],forest:[58,100,42],hill:[115,100,68],rock:[128,115,98],snow:[225,225,232]};
+  const R=(s)=>{let x=Math.sin(s*127.1+S*0.31)*43758.5453;return x-Math.floor(x)};
 
-  // Multiple island blobs — not a single oval
-  // Defined as {cx,cy,rx,ry,str} normalized 0..1
-  const R=(s)=>{let x=Math.sin(s*127.1+S)*43758.5453;return x-Math.floor(x)};
+  // Islands: lower str=0.55 so centers stay in forest/hill, not snow
   const islands=[
-    {cx:.38+R(1)*.24, cy:.38+R(2)*.24, r:.22+R(3)*.12, str:.9},  // main continent
-    {cx:.62+R(4)*.18, cy:.55+R(5)*.18, r:.16+R(6)*.10, str:.85}, // second landmass
-    {cx:.18+R(7)*.12, cy:.62+R(8)*.12, r:.08+R(9)*.06, str:.8},  // small island
-    {cx:.75+R(10)*.1, cy:.22+R(11)*.1, r:.06+R(12)*.04,str:.75}, // tiny island
-    {cx:.50+R(13)*.1, cy:.80+R(14)*.1, r:.05+R(15)*.04,str:.7},  // tiny island
+    {cx:.30+R(1)*.30, cy:.35+R(2)*.25, r:.20+R(3)*.10, str:.58},
+    {cx:.60+R(4)*.22, cy:.52+R(5)*.22, r:.14+R(6)*.09, str:.54},
+    {cx:.16+R(7)*.15, cy:.65+R(8)*.15, r:.07+R(9)*.05, str:.50},
+    {cx:.78+R(10)*.12,cy:.20+R(11)*.15,r:.06+R(12)*.04,str:.48},
+    {cx:.52+R(13)*.12,cy:.78+R(14)*.12,r:.05+R(15)*.04,str:.46},
   ];
+
+  // Precompute warp field (coarse grid)
+  const GW=Math.ceil(W/4), GH=Math.ceil(H/4);
+  const warpX=new Float32Array(GW*GH), warpY=new Float32Array(GW*GH);
+  for(let gy=0;gy<GH;gy++) for(let gx=0;gx<GW;gx++){
+    const nx=gx/GW*3, ny=gy/GH*3;
+    warpX[gy*GW+gx]=(fbm(nx,ny,S+7)-.5)*.55;   // ±0.275 warp!
+    warpY[gy*GW+gx]=(fbm(nx+5.2,ny+1.3,S+13)-.5)*.55;
+  }
 
   for(let py=0;py<H;py++){
     for(let px=0;px<W;px++){
       const nx=px/W, ny=py/H;
-      // Continent height = max of all island contributions + noise
+      // Bilinear warp lookup
+      const gx=px/4, gy=py/4;
+      const gxi=Math.min(Math.floor(gx),GW-2), gyi=Math.min(Math.floor(gy),GH-2);
+      const gxf=gx-gxi, gyf=gy-gyi;
+      const wa=(gyi*GW+gxi), wb=wa+1, wc=wa+GW, wd=wc+1;
+      const wx=warpX[wa]*(1-gxf)*(1-gyf)+warpX[wb]*gxf*(1-gyf)+warpX[wc]*(1-gxf)*gyf+warpX[wd]*gxf*gyf;
+      const wy=warpY[wa]*(1-gxf)*(1-gyf)+warpY[wb]*gxf*(1-gyf)+warpY[wc]*(1-gxf)*gyf+warpY[wd]*gxf*gyf;
+
+      const wnx=nx+wx, wny=ny+wy;
       let landH=0;
       for(const isl of islands){
-        const dx=(nx-isl.cx)*2.2, dy=(ny-isl.cy)*2.8;
+        const dx=(wnx-isl.cx)*2.0, dy=(wny-isl.cy)*2.5;
         const dist=Math.sqrt(dx*dx+dy*dy);
-        // Warp with noise for irregular coastline
-        const warp=fbm(nx*4+S*.01,ny*4+S*.013,S+71)*.18-.09;
-        const h=isl.str - (dist+warp)*isl.str*1.6;
+        const h=isl.str - dist*isl.str*1.55;
         if(h>landH) landH=h;
       }
-      // Add FBM for terrain variation
-      const detail=fbm(nx*5,ny*5,S)*.25;
-      let h=landH+detail*.4;
-      h=Math.max(0,Math.min(1,h));
+      // Terrain detail (fine noise)
+      const detail=(fbm(nx*6,ny*6,S+41)-.5)*.14;
+      let h=Math.max(0,Math.min(1, landH+detail));
 
       let col;
-      if(h<.22) col=lC(B.dSea,B.sea,h/.22);
-      else if(h<.36) col=lC(B.sea,B.shallow,(h-.22)/.14);
-      else if(h<.42) col=lC(B.shallow,B.sand,(h-.36)/.06);
-      else if(h<.48) col=lC(B.sand,B.grass,(h-.42)/.06);
-      else if(h<.64) col=lC(B.grass,B.forest,(h-.48)/.16);
-      else if(h<.76) col=lC(B.forest,B.hill,(h-.64)/.12);
-      else if(h<.88) col=lC(B.hill,B.rock,(h-.76)/.12);
-      else           col=lC(B.rock,B.snow,(h-.88)/.12);
+      if(h<.12) col=lC(B.dSea,B.sea,h/.12);
+      else if(h<.25) col=lC(B.sea,B.shallow,(h-.12)/.13);
+      else if(h<.32) col=lC(B.shallow,B.sand,(h-.25)/.07);
+      else if(h<.38) col=lC(B.sand,B.grass,(h-.32)/.06);
+      else if(h<.52) col=lC(B.grass,B.forest,(h-.38)/.14);
+      else if(h<.60) col=lC(B.forest,B.hill,(h-.52)/.08);
+      else if(h<.68) col=lC(B.hill,B.rock,(h-.60)/.08);
+      else           col=lC(B.rock,B.snow,(h-.68)/.14);
 
-      // Micro shading — suave para no crear halos
-      const shade=.90+fbm(nx*8,ny*8,S+33)*.18;
+      // Hillshading from NW
+      const shade=.92+fbm(nx*10,ny*10,S+77)*.14;
       const i=(py*W+px)*4;
       d[i]=col[0]*shade; d[i+1]=col[1]*shade; d[i+2]=col[2]*shade; d[i+3]=255;
     }
   }
   ctx.putImageData(img,0,0);
 
-  // Rivers
+  // ── Overlay symbols ──
+  // Rivers (thin blue, start on land)
   for(let r=0;r<5;r++){
-    const sx=R(r*11+1)*W*.8+W*.1, sy=R(r*17+2)*H*.5+H*.1;
-    const ex=sx+(R(r*23+3)-.5)*120, ey=sy+80+R(r*7+4)*80;
-    ctx.strokeStyle=`rgba(15,70,130,${.3+R(r)*0.2})`; ctx.lineWidth=1+R(r*3);
+    const sx=(R(r*11+1)*.7+.15)*W, sy=(R(r*17+2)*.6+.1)*H;
+    const ex=sx+(R(r*23+3)-.5)*W*.25, ey=sy+H*(.12+R(r*7+4)*.18);
+    ctx.strokeStyle=`rgba(18,60,115,${.35+R(r)*.2})`; ctx.lineWidth=1.2;
     ctx.beginPath(); ctx.moveTo(sx,sy);
-    ctx.quadraticCurveTo(sx+(R(r*31+5)-.5)*80,(sy+ey)/2,ex,ey); ctx.stroke();
-  }
-  // Mountains
-  for(let m=0;m<25;m++){
-    const mx=R(m*41+1)*W, my=R(m*53+2)*H;
-    const nx=mx/W, ny=my/H;
-    let lh=0;
-    for(const isl of islands){const dx=(nx-isl.cx)*2.2,dy=(ny-isl.cy)*2.8;const dist=Math.sqrt(dx*dx+dy*dy);const h=isl.str-dist*isl.str*1.6;if(h>lh)lh=h;}
-    if(lh+fbm(nx*5,ny*5,S)*.1 < .62) continue;
-    const mh=8+R(m*7)*10, mw=mh*.55;
-    ctx.fillStyle=`rgba(70,60,55,.75)`;
-    ctx.beginPath();ctx.moveTo(mx,my-mh);ctx.lineTo(mx-mw,my);ctx.lineTo(mx+mw,my);ctx.closePath();ctx.fill();
-    ctx.fillStyle=`rgba(225,228,238,.85)`;
-    ctx.beginPath();ctx.moveTo(mx,my-mh);ctx.lineTo(mx-mw*.3,my-mh*.4);ctx.lineTo(mx+mw*.3,my-mh*.4);ctx.closePath();ctx.fill();
-  }
-  // Trees
-  for(let t=0;t<80;t++){
-    const tx=R(t*13+1)*W, ty=R(t*19+2)*H;
-    const nx=tx/W, ny=ty/H;
-    let lh=0;
-    for(const isl of islands){const dx=(nx-isl.cx)*2.2,dy=(ny-isl.cy)*2.8;const dist=Math.sqrt(dx*dx+dy*dy);const h=isl.str-dist*isl.str*1.6;if(h>lh)lh=h;}
-    lh+=fbm(nx*5,ny*5,S)*.1;
-    if(lh<.46||lh>.68) continue;
-    const ts=4+R(t*7)*5;
-    ctx.fillStyle=`rgba(25,58,18,${.45+R(t*3)*.4})`;
-    ctx.beginPath();ctx.arc(tx,ty,ts,0,Math.PI*2);ctx.fill();
-    ctx.fillStyle=`rgba(42,78,28,${.35+R(t*11)*.35})`;
-    ctx.beginPath();ctx.arc(tx-ts*.25,ty-ts*.2,ts*.65,0,Math.PI*2);ctx.fill();
+    ctx.quadraticCurveTo((sx+ex)/2+(R(r*31+5)-.5)*60,(sy+ey)/2,ex,ey); ctx.stroke();
   }
 
-  terrainCache=off;
-  return off;
+  // Mountain symbols (check they're on high terrain)
+  function getH(px,py){
+    const nx=px/W, ny=py/H;
+    const gx=Math.min(px/4,GW-2)|0, gy=Math.min(py/4,GH-2)|0;
+    const wx=warpX[gy*GW+gx], wy=warpY[gy*GW+gx];
+    let lh=0;
+    for(const isl of islands){const dx=(nx+wx-isl.cx)*2,dy=(ny+wy-isl.cy)*2.5;lh=Math.max(lh,isl.str-Math.sqrt(dx*dx+dy*dy)*isl.str*1.55);}
+    return Math.max(0,lh+(fbm(nx*6,ny*6,S+41)-.5)*.14);
+  }
+  for(let m=0;m<40;m++){
+    const mx=R(m*41+1)*W, my=R(m*53+2)*H;
+    if(getH(mx,my)<.56) continue;
+    const mh=7+R(m*7)*9, mw=mh*.5;
+    ctx.fillStyle=`rgba(65,55,50,.8)`;
+    ctx.beginPath();ctx.moveTo(mx,my-mh);ctx.lineTo(mx-mw,my+2);ctx.lineTo(mx+mw,my+2);ctx.closePath();ctx.fill();
+    ctx.fillStyle=`rgba(218,222,232,.9)`;
+    ctx.beginPath();ctx.moveTo(mx,my-mh);ctx.lineTo(mx-mw*.32,my-mh*.38);ctx.lineTo(mx+mw*.32,my-mh*.38);ctx.closePath();ctx.fill();
+  }
+  // Tree symbols (forest zones)
+  for(let t=0;t<120;t++){
+    const tx=R(t*13+1)*W, ty=R(t*19+2)*H;
+    const th=getH(tx,ty);
+    if(th<.38||th>.58) continue;
+    const ts=3+R(t*7)*4;
+    ctx.fillStyle=`rgba(30,68,20,${.5+R(t*3)*.4})`;
+    ctx.beginPath();ctx.arc(tx,ty,ts,0,Math.PI*2);ctx.fill();
+  }
+
+  terrainCache=off; return off;
 }
 
 // ─── World Map ────────────────────────────────────────────
