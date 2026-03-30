@@ -3,6 +3,7 @@ import requests
 
 OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY", "")
 DEFAULT_MODEL = os.getenv("LLM_MODEL", "minimax/minimax-m2.5:free")
+MAX_TOKENS = int(os.getenv("LLM_MAX_TOKENS", "0"))  # 0 = no limit (let model decide)
 
 def ask_llm(prompt: str, system: str = "", max_tokens: int = 500) -> str:
     headers = {
@@ -15,14 +16,17 @@ def ask_llm(prompt: str, system: str = "", max_tokens: int = 500) -> str:
         messages.append({"role": "system", "content": system})
     messages.append({"role": "user", "content": prompt})
 
-    # Reasoning models need extra tokens (they think before answering)
-    effective_tokens = max(max_tokens, 1500)
+    # If LLM_MAX_TOKENS is set, use it; otherwise don't send the param (model decides)
+    payload = {"model": DEFAULT_MODEL, "messages": messages}
+    limit = MAX_TOKENS or max_tokens if MAX_TOKENS else None
+    if limit:
+        payload["max_tokens"] = limit
 
     resp = requests.post(
         "https://openrouter.ai/api/v1/chat/completions",
         headers=headers,
-        json={"model": DEFAULT_MODEL, "messages": messages, "max_tokens": effective_tokens},
-        timeout=60,
+        json=payload,
+        timeout=120,
     )
     if not resp.ok:
         raise Exception(f"OpenRouter error {resp.status_code}: {resp.text}")
