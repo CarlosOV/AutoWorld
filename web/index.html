@@ -250,7 +250,8 @@ async function fetchState() {
     worldData = d;
     render(d);
     checkNewEvents(d.events);
-  } catch(e) {}
+    return d;
+  } catch(e) { console.error('fetchState error:', e); }
 }
 
 function render(d) {
@@ -291,12 +292,19 @@ function updateAgentPositions(agents) {
     const color = civ ? CIV_COLORS[civIdx % CIV_COLORS.length] : '#607080';
     const emoji = AGENT_EMOJIS[Math.abs(hashCode(a.name)) % AGENT_EMOJIS.length];
 
+    // Fallback position from name hash if DB has no x/y yet
+    const fallX = 0.1 + (Math.abs(hashCode(a.name)) % 800) / 1000;
+    const fallY = 0.1 + (Math.abs(hashCode(a.name + 'y')) % 800) / 1000;
+    const tx = typeof a.x === 'number' ? a.x : fallX;
+    const ty = typeof a.y === 'number' ? a.y : fallY;
+
     if (!agentPositions[key]) {
-      agentPositions[key] = {x: a.x||.5, y: a.y||.5, tx: a.x||.5, ty: a.y||.5, color, emoji, vx:0, vy:0};
+      agentPositions[key] = {x: tx, y: ty, tx, ty, color, emoji};
     } else {
-      agentPositions[key].tx = a.x || agentPositions[key].tx;
-      agentPositions[key].ty = a.y || agentPositions[key].ty;
+      agentPositions[key].tx = tx;
+      agentPositions[key].ty = ty;
       agentPositions[key].color = color;
+      agentPositions[key].emoji = emoji;
     }
   });
 }
@@ -545,10 +553,11 @@ async function askOracle(deep) {
 function hashCode(s){let h=0;for(let i=0;i<s.length;i++)h=Math.imul(31,h)+s.charCodeAt(i)|0;return Math.abs(h)}
 
 // ─── Init ─────────────────────────────────────────────────
-fetchState();
+fetchState().then(() => {
+  animateMap(); // start animation only after first data load
+});
 setInterval(fetchState, 30000);
 loadEvents(true);
-animateMap();
 </script>
 </body>
 </html>

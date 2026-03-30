@@ -44,8 +44,10 @@ Previous era: {current_era}
 Civilizations: {civs_str}
 Recent lore: {ctx['lore'] or ctx['recent']}
 
-A new era is beginning. Give it a dramatic, poetic name (4-6 words max).
-Examples: "The Age of Burning Skies", "Era of the Shattered Crown", "The Long Silence"
+A new era is beginning in this fictional world. Give it a dramatic, poetic, ORIGINAL name (4-6 words max).
+IMPORTANT: Do NOT use names from existing games, movies, books or franchises (no "Age of Empires", "Game of Thrones", etc.)
+Create something unique to THIS world's history.
+Examples: "The Era of Ash and Memory", "When the Rivers Turned Gold", "The Age of Whispering Stones"
 Respond with ONLY the era name, nothing else.
 """
     try:
