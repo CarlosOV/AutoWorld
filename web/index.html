@@ -205,14 +205,16 @@ header h1{font-family:'Cinzel',serif;font-size:1.3rem;color:var(--gold2);letter-
       <div class="chronicle-filters">
         <input id="search-events" placeholder="search..." oninput="searchEvents(this.value)">
         <select id="filter-type" onchange="searchEvents(document.getElementById('search-events').value)">
+          <option value="notable">notable</option>
           <option value="">all</option>
           <option value="world_event">world</option>
-          <option value="war">war</option>
-          <option value="gossip">gossip</option>
-          <option value="discovery">discovery</option>
-          <option value="personal_story">story</option>
-          <option value="birth">birth</option>
-          <option value="era_change">era</option>
+          <option value="war">⚔️ war</option>
+          <option value="gossip">🗣️ gossip</option>
+          <option value="discovery">🔬 discovery</option>
+          <option value="personal_story">📖 stories</option>
+          <option value="birth">👶 births</option>
+          <option value="era_change">🌅 eras</option>
+          <option value="agent_reaction">reactions</option>
         </select>
       </div>
       <div id="event-list"></div>
@@ -289,30 +291,24 @@ function checkNewEvents(events) {
 // ─── Terrain Generation — heightmap noise ────────────────
 let terrainCache = null, terrainSeed = 0;
 
-function noise2d(x, y, seed) {
-  // Simple value noise using sin/cos harmonics
-  const s = seed * 127.1;
-  return Math.sin(x * 12.9898 + y * 78.233 + s) * 43758.5453 % 1;
+// Proper value noise — returns consistent 0..1
+function hash2(ix, iy, seed) {
+  let n = ix * 1619 + iy * 31337 + seed * 1013;
+  n = (n << 13) ^ n;
+  return 1.0 - ((n * (n * n * 15731 + 789221) + 1376312589) & 0x7fffffff) / 1073741824.0;
 }
-
 function smoothNoise(x, y, seed) {
-  const ix = Math.floor(x), iy = Math.floor(y);
-  const fx = x - ix, fy = y - iy;
-  const ux = fx*fx*(3-2*fx), uy = fy*fy*(3-2*fy);
-  const a = noise2d(ix,   iy,   seed);
-  const b = noise2d(ix+1, iy,   seed);
-  const c = noise2d(ix,   iy+1, seed);
-  const d = noise2d(ix+1, iy+1, seed);
-  return a + (b-a)*ux + (c-a)*uy + (d-a+a-b-c+b)*ux*uy;
+  const ix=Math.floor(x)|0, iy=Math.floor(y)|0;
+  const fx=x-ix, fy=y-iy;
+  const ux=fx*fx*(3-2*fx), uy=fy*fy*(3-2*fy);
+  const a=hash2(ix,   iy,   seed), b=hash2(ix+1,iy,  seed);
+  const c=hash2(ix,   iy+1, seed), d=hash2(ix+1,iy+1,seed);
+  return (a+(b-a)*ux+(c-a)*uy+(d-c-(b-a))*ux*uy)*.5+.5;
 }
-
-function fbm(x, y, seed, octaves=6) {
-  let v=0, amp=0.5, freq=1, max=0;
-  for(let i=0;i<octaves;i++){
-    v   += smoothNoise(x*freq, y*freq, seed+i*7.3) * amp;
-    max += amp; amp *= 0.5; freq *= 2.1;
-  }
-  return v / max;
+function fbm(x, y, seed, oct=6) {
+  let v=0,amp=.5,freq=1,tot=0;
+  for(let i=0;i<oct;i++){v+=smoothNoise(x*freq,y*freq,seed+i*179)* amp;tot+=amp;amp*=.5;freq*=2.1;}
+  return v/tot;
 }
 
 function generateTerrain(W, H, worldName) {
@@ -416,22 +412,34 @@ function generateTerrain(W, H, worldName) {
 }
 
 // ─── World Map ────────────────────────────────────────────
+// Compute civ centers so agents of same civ cluster together
+const CIV_CENTERS = [
+  {x:.25,y:.35},{x:.72,y:.28},{x:.55,y:.65},{x:.20,y:.70},{x:.80,y:.65}
+];
+
 function updateAgentPositions(agents) {
+  const civs = worldData.civilizations || [];
   agents.forEach((a, i) => {
     const key = a.name;
-    const civ = (worldData.civilizations||[]).find(c=>c.name===a.civ);
-    const civIdx = (worldData.civilizations||[]).indexOf(civ);
-    const color = civ ? CIV_COLORS[civIdx % CIV_COLORS.length] : '#607080';
+    const civIdx = civs.findIndex(c=>c.name===a.civ);
+    const color = civIdx>=0 ? CIV_COLORS[civIdx % CIV_COLORS.length] : '#607080';
     const emoji = AGENT_EMOJIS[Math.abs(hashCode(a.name)) % AGENT_EMOJIS.length];
 
-    // Fallback position from name hash if DB has no x/y yet
-    const fallX = 0.1 + (Math.abs(hashCode(a.name)) % 800) / 1000;
-    const fallY = 0.1 + (Math.abs(hashCode(a.name + 'y')) % 800) / 1000;
-    const tx = typeof a.x === 'number' ? a.x : fallX;
-    const ty = typeof a.y === 'number' ? a.y : fallY;
+    // Target: near civ center (with personal offset) or random if no civ
+    let tx, ty;
+    if (civIdx >= 0) {
+      const center = CIV_CENTERS[civIdx % CIV_CENTERS.length];
+      const offsetX = ((hashCode(a.name) % 200) - 100) / 1000;
+      const offsetY = ((hashCode(a.name+'y') % 200) - 100) / 1000;
+      tx = Math.max(0.05, Math.min(0.95, center.x + offsetX));
+      ty = Math.max(0.05, Math.min(0.95, center.y + offsetY));
+    } else {
+      tx = typeof a.x==='number' ? a.x : 0.1 + (Math.abs(hashCode(a.name))%800)/1000;
+      ty = typeof a.y==='number' ? a.y : 0.1 + (Math.abs(hashCode(a.name+'y'))%800)/1000;
+    }
 
     if (!agentPositions[key]) {
-      agentPositions[key] = {x: tx, y: ty, tx, ty, color, emoji};
+      agentPositions[key] = {x:tx, y:ty, tx, ty, color, emoji};
     } else {
       agentPositions[key].tx = tx;
       agentPositions[key].ty = ty;
@@ -561,11 +569,20 @@ async function searchEvents(q) {
 
 async function loadMoreEvents() { eventsOffset += EVENTS_PAGE; await loadEvents(false); }
 
+const NOTABLE_TYPES = ['world_event','war','gossip','personal_story','discovery','birth','era_change','civilization_formed'];
+
 async function loadEvents(reset = true) {
+  // "notable" = exclude boring agent_reactions
+  const filterType = currentType === 'notable' ? '' : currentType;
   const params = new URLSearchParams({limit:EVENTS_PAGE, offset:eventsOffset,
-    ...(currentType&&{type:currentType}), ...(currentSearch&&{search:currentSearch})});
+    ...(filterType&&{type:filterType}), ...(currentSearch&&{search:currentSearch})});
   const res = await fetch('/api/events?'+params);
   const d = await res.json();
+
+  // Client-side filter for "notable"
+  if (currentType === 'notable') {
+    d.events = d.events.filter(e => NOTABLE_TYPES.includes(e.type));
+  }
   document.getElementById('load-more-btn').style.display = eventsOffset+EVENTS_PAGE>=d.total?'none':'block';
 
   const html = d.events.map(e => {
