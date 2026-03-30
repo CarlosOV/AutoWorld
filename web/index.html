@@ -312,103 +312,106 @@ function fbm(x, y, seed, oct=6) {
 }
 
 function generateTerrain(W, H, worldName) {
-  const seed = (hashCode(worldName||'world') % 1000) / 100;
-  if (terrainCache && terrainSeed === seed && terrainCache.width === W) return terrainCache;
-  terrainSeed = seed;
+  const S = Math.abs(hashCode(worldName||'world')) % 9999 + 1;
+  if (terrainCache && terrainSeed===S && terrainCache.width===W) return terrainCache;
+  terrainSeed = S;
 
-  const offscreen = document.createElement('canvas');
-  offscreen.width = W; offscreen.height = H;
-  const ctx = offscreen.getContext('2d');
-  const img = ctx.createImageData(W, H);
+  const off = document.createElement('canvas');
+  off.width=W; off.height=H;
+  const ctx = off.getContext('2d');
+  const img = ctx.createImageData(W,H);
   const d = img.data;
 
-  // Biome colors [r,g,b]
-  const C = {
-    deepSea:    [6,18,35],
-    sea:        [10,32,58],
-    shallowSea: [14,52,80],
-    shore:      [180,160,100],
-    lowland:    [82,110,58],
-    forest:     [38,72,34],
-    highland:   [90,80,60],
-    mountain:   [110,100,90],
-    snow:       [220,220,230],
-  };
+  function lC(a,b,t){return[a[0]+(b[0]-a[0])*t, a[1]+(b[1]-a[1])*t, a[2]+(b[2]-a[2])*t]}
 
-  function lerp(a,b,t){return a+(b-a)*t}
-  function lerpC(ca,cb,t){return[lerp(ca[0],cb[0],t),lerp(ca[1],cb[1],t),lerp(ca[2],cb[2],t)]}
+  // Biomes
+  const B={dSea:[5,15,35],sea:[8,28,58],shallow:[12,52,85],sand:[185,165,105],grass:[72,105,48],forest:[35,68,28],hill:[95,82,55],rock:[105,95,82],snow:[215,218,228]};
+
+  // Multiple island blobs — not a single oval
+  // Defined as {cx,cy,rx,ry,str} normalized 0..1
+  const R=(s)=>{let x=Math.sin(s*127.1+S)*43758.5453;return x-Math.floor(x)};
+  const islands=[
+    {cx:.38+R(1)*.24, cy:.38+R(2)*.24, r:.22+R(3)*.12, str:.9},  // main continent
+    {cx:.62+R(4)*.18, cy:.55+R(5)*.18, r:.16+R(6)*.10, str:.85}, // second landmass
+    {cx:.18+R(7)*.12, cy:.62+R(8)*.12, r:.08+R(9)*.06, str:.8},  // small island
+    {cx:.75+R(10)*.1, cy:.22+R(11)*.1, r:.06+R(12)*.04,str:.75}, // tiny island
+    {cx:.50+R(13)*.1, cy:.80+R(14)*.1, r:.05+R(15)*.04,str:.7},  // tiny island
+  ];
 
   for(let py=0;py<H;py++){
     for(let px=0;px<W;px++){
-      const nx = px/W * 3.5, ny = py/H * 2.8;
-      let h = fbm(nx, ny, seed);
-      // Island mask — fade to ocean at edges
-      const dx = (px/W-.5)*2, dy = (py/H-.5)*2;
-      const dist = Math.sqrt(dx*dx+dy*dy);
-      h -= dist * 0.55;
-      h = Math.max(0, Math.min(1, h));
+      const nx=px/W, ny=py/H;
+      // Continent height = max of all island contributions + noise
+      let landH=0;
+      for(const isl of islands){
+        const dx=(nx-isl.cx)*2.2, dy=(ny-isl.cy)*2.8;
+        const dist=Math.sqrt(dx*dx+dy*dy);
+        // Warp with noise for irregular coastline
+        const warp=fbm(nx*4+S*.01,ny*4+S*.013,S+71)*.18-.09;
+        const h=isl.str - (dist+warp)*isl.str*1.6;
+        if(h>landH) landH=h;
+      }
+      // Add FBM for terrain variation
+      const detail=fbm(nx*5,ny*5,S)*.25;
+      let h=landH+detail*.4;
+      h=Math.max(0,Math.min(1,h));
 
       let col;
-      if      (h < .25) col = lerpC(C.deepSea,    C.sea,       h/.25);
-      else if (h < .38) col = lerpC(C.sea,         C.shallowSea,(h-.25)/.13);
-      else if (h < .44) col = lerpC(C.shallowSea,  C.shore,    (h-.38)/.06);
-      else if (h < .48) col = lerpC(C.shore,        C.lowland,  (h-.44)/.04);
-      else if (h < .60) col = lerpC(C.lowland,      C.forest,   (h-.48)/.12);
-      else if (h < .72) col = lerpC(C.forest,       C.highland, (h-.60)/.12);
-      else if (h < .84) col = lerpC(C.highland,     C.mountain, (h-.72)/.12);
-      else              col = lerpC(C.mountain,      C.snow,     (h-.84)/.16);
+      if(h<.18) col=lC(B.dSea,B.sea,h/.18);
+      else if(h<.32) col=lC(B.sea,B.shallow,(h-.18)/.14);
+      else if(h<.38) col=lC(B.shallow,B.sand,(h-.32)/.06);
+      else if(h<.44) col=lC(B.sand,B.grass,(h-.38)/.06);
+      else if(h<.58) col=lC(B.grass,B.forest,(h-.44)/.14);
+      else if(h<.70) col=lC(B.forest,B.hill,(h-.58)/.12);
+      else if(h<.82) col=lC(B.hill,B.rock,(h-.70)/.12);
+      else           col=lC(B.rock,B.snow,(h-.82)/.18);
 
-      // Subtle shading variation
-      const shade = 0.88 + fbm(nx*4,ny*4,seed+99) * 0.24;
-      const i = (py*W+px)*4;
-      d[i]   = col[0]*shade; d[i+1] = col[1]*shade;
-      d[i+2] = col[2]*shade; d[i+3] = 255;
+      // Micro shading
+      const shade=.84+fbm(nx*12,ny*12,S+33)*.28;
+      const i=(py*W+px)*4;
+      d[i]=col[0]*shade; d[i+1]=col[1]*shade; d[i+2]=col[2]*shade; d[i+3]=255;
     }
   }
-  ctx.putImageData(img, 0, 0);
+  ctx.putImageData(img,0,0);
 
-  // Draw rivers as thin blue lines
-  const rng = (s) => { let x=Math.sin(s)*43758.5453; return x-Math.floor(x); };
-  for(let r=0;r<4;r++){
-    const sx=rng(seed+r*11)*W, sy=rng(seed+r*17)*H*0.6;
-    const ex=sx+(rng(seed+r*23)-.5)*W*.3, ey=sy+H*(.2+rng(seed+r*7)*.3);
-    ctx.strokeStyle='rgba(20,80,140,0.45)'; ctx.lineWidth=1.2;
+  // Rivers
+  for(let r=0;r<5;r++){
+    const sx=R(r*11+1)*W*.8+W*.1, sy=R(r*17+2)*H*.5+H*.1;
+    const ex=sx+(R(r*23+3)-.5)*120, ey=sy+80+R(r*7+4)*80;
+    ctx.strokeStyle=`rgba(15,70,130,${.3+R(r)*0.2})`; ctx.lineWidth=1+R(r*3);
     ctx.beginPath(); ctx.moveTo(sx,sy);
-    ctx.quadraticCurveTo(sx+(rng(seed+r*31)-.5)*100, (sy+ey)/2, ex, ey); ctx.stroke();
+    ctx.quadraticCurveTo(sx+(R(r*31+5)-.5)*80,(sy+ey)/2,ex,ey); ctx.stroke();
+  }
+  // Mountains
+  for(let m=0;m<25;m++){
+    const mx=R(m*41+1)*W, my=R(m*53+2)*H;
+    const nx=mx/W, ny=my/H;
+    let lh=0;
+    for(const isl of islands){const dx=(nx-isl.cx)*2.2,dy=(ny-isl.cy)*2.8;const dist=Math.sqrt(dx*dx+dy*dy);const h=isl.str-dist*isl.str*1.6;if(h>lh)lh=h;}
+    if(lh+fbm(nx*5,ny*5,S)*.1 < .62) continue;
+    const mh=8+R(m*7)*10, mw=mh*.55;
+    ctx.fillStyle=`rgba(70,60,55,.75)`;
+    ctx.beginPath();ctx.moveTo(mx,my-mh);ctx.lineTo(mx-mw,my);ctx.lineTo(mx+mw,my);ctx.closePath();ctx.fill();
+    ctx.fillStyle=`rgba(225,228,238,.85)`;
+    ctx.beginPath();ctx.moveTo(mx,my-mh);ctx.lineTo(mx-mw*.3,my-mh*.4);ctx.lineTo(mx+mw*.3,my-mh*.4);ctx.closePath();ctx.fill();
+  }
+  // Trees
+  for(let t=0;t<80;t++){
+    const tx=R(t*13+1)*W, ty=R(t*19+2)*H;
+    const nx=tx/W, ny=ty/H;
+    let lh=0;
+    for(const isl of islands){const dx=(nx-isl.cx)*2.2,dy=(ny-isl.cy)*2.8;const dist=Math.sqrt(dx*dx+dy*dy);const h=isl.str-dist*isl.str*1.6;if(h>lh)lh=h;}
+    lh+=fbm(nx*5,ny*5,S)*.1;
+    if(lh<.46||lh>.68) continue;
+    const ts=4+R(t*7)*5;
+    ctx.fillStyle=`rgba(25,58,18,${.45+R(t*3)*.4})`;
+    ctx.beginPath();ctx.arc(tx,ty,ts,0,Math.PI*2);ctx.fill();
+    ctx.fillStyle=`rgba(42,78,28,${.35+R(t*11)*.35})`;
+    ctx.beginPath();ctx.arc(tx-ts*.25,ty-ts*.2,ts*.65,0,Math.PI*2);ctx.fill();
   }
 
-  // Mountain symbols on high terrain
-  for(let m=0;m<30;m++){
-    const mx=rng(seed+m*41)*W, my=rng(seed+m*53)*H;
-    const nx=mx/W*3.5, ny=my/H*2.8;
-    let h = fbm(nx,ny,seed);
-    const dx=(mx/W-.5)*2, dy=(my/H-.5)*2;
-    h -= Math.sqrt(dx*dx+dy*dy)*.55;
-    if(h < .68) continue;
-    const mh=7+rng(seed+m)*8, mw=mh*.6;
-    ctx.fillStyle='rgba(80,70,65,0.7)';
-    ctx.beginPath(); ctx.moveTo(mx,my-mh); ctx.lineTo(mx-mw,my); ctx.lineTo(mx+mw,my); ctx.closePath(); ctx.fill();
-    ctx.fillStyle='rgba(230,230,240,0.8)';
-    ctx.beginPath(); ctx.moveTo(mx,my-mh); ctx.lineTo(mx-mw*.35,my-mh*.45); ctx.lineTo(mx+mw*.35,my-mh*.45); ctx.closePath(); ctx.fill();
-  }
-
-  // Tree symbols in forest areas
-  for(let t=0;t<60;t++){
-    const tx=rng(seed+t*13)*W, ty=rng(seed+t*19)*H;
-    const nx=tx/W*3.5, ny=ty/H*2.8;
-    let h = fbm(nx,ny,seed);
-    const dx=(tx/W-.5)*2, dy=(ty/H-.5)*2;
-    h -= Math.sqrt(dx*dx+dy*dy)*.55;
-    if(h < .50 || h > .70) continue;
-    const ts=5+rng(seed+t)*4;
-    ctx.fillStyle=`rgba(28,62,24,${0.5+rng(seed+t*7)*.4})`;
-    ctx.beginPath(); ctx.arc(tx,ty,ts,0,Math.PI*2); ctx.fill();
-    ctx.fillStyle=`rgba(38,80,30,${0.4+rng(seed+t*3)*.4})`;
-    ctx.beginPath(); ctx.arc(tx-ts*.3,ty-ts*.2,ts*.7,0,Math.PI*2); ctx.fill();
-  }
-
-  terrainCache = offscreen;
-  return offscreen;
+  terrainCache=off;
+  return off;
 }
 
 // ─── World Map ────────────────────────────────────────────
@@ -481,9 +484,16 @@ function drawMap() {
     ctx.fillStyle=g; ctx.beginPath(); ctx.arc(cx,cy,r,0,Math.PI*2); ctx.fill();
     ctx.strokeStyle=col+'33'; ctx.lineWidth=1;
     ctx.beginPath(); ctx.arc(cx,cy,r,0,Math.PI*2); ctx.stroke();
-    // Civ label
-    ctx.fillStyle=col+'99'; ctx.font='bold 11px Cinzel,serif';
-    ctx.textAlign='center'; ctx.fillText(civ.name, cx, cy-r-6);
+    // Civ label — readable with outline
+    ctx.font='bold 12px Cinzel,serif'; ctx.textAlign='center';
+    ctx.strokeStyle='rgba(0,0,0,.85)'; ctx.lineWidth=3;
+    ctx.strokeText(civ.name, cx, cy-r-8);
+    ctx.fillStyle=col+'ee';
+    ctx.fillText(civ.name, cx, cy-r-8);
+    // Status badge
+    if(civ.status==='war'){
+      ctx.font='10px serif'; ctx.fillText('⚔️',cx+ctx.measureText(civ.name).width/2+10, cy-r-8);
+    }
   });
 
   // Relationship lines
