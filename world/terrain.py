@@ -21,27 +21,19 @@ def get_continent_centers(world_seed: str) -> list[dict]:
     if cached:
         return json.loads(cached)
 
-    S = abs(_hash_seed(world_seed)) % 9999 + 1
-    rng_i = [0]
-
-    def rng():
-        # Mirror JS: (rngI++) uses pre-increment value, rngI*rngI uses post-increment
-        i = rng_i[0]
-        rng_i[0] += 1
-        return _srand(S * 1.7 + i * 0.31 + rng_i[0] * rng_i[0] * 0.007)
-
-    # Skip ocean texture calls: 300 iterations × 5 rng() calls each = 1500
-    for _ in range(1500):
-        rng()
+    # Simple deterministic positions from seed — no RNG chain to sync with JS
+    # JS now uses these centers directly to draw continent blobs
+    def r(i: int, lo: float, hi: float) -> float:
+        return round(lo + _srand(S * 3.7 + i * 1.13) * (hi - lo), 4)
 
     centers = [
-        {"x": .22 + rng() * .18, "y": .25 + rng() * .20},
-        {"x": .58 + rng() * .18, "y": .38 + rng() * .20},
-        {"x": .35 + rng() * .12, "y": .65 + rng() * .15},
-        {"x": .72 + rng() * .10, "y": .65 + rng() * .12},
-        {"x": .80 + rng() * .08, "y": .20 + rng() * .12},
-        {"x": .12 + rng() * .08, "y": .45 + rng() * .08},
-        {"x": .88 + rng() * .05, "y": .48 + rng() * .08},
+        {"x": r(0, .15, .45), "y": r(1, .15, .45)},
+        {"x": r(2, .50, .80), "y": r(3, .25, .55)},
+        {"x": r(4, .25, .55), "y": r(5, .55, .82)},
+        {"x": r(6, .60, .85), "y": r(7, .55, .82)},
+        {"x": r(8, .70, .92), "y": r(9, .10, .40)},
+        {"x": r(10,.05, .25), "y": r(11,.35, .65)},
+        {"x": r(12,.82, .96), "y": r(13,.38, .62)},
     ]
     centers = [{"x": round(c["x"], 4), "y": round(c["y"], 4)} for c in centers]
     set_world_state("continent_centers", json.dumps(centers))

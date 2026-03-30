@@ -146,16 +146,16 @@ function generateTerrain(W, H, worldName) {
 
   // ── Continents — layered approach ──
   // Each continent: deep base (dark green) → lowland → forest interior
-  const continents=[
-    {cx:W*(.22+rng()*.18), cy:H*(.25+rng()*.20), r:Math.min(W,H)*(.18+rng()*.10), spikes:32},
-    {cx:W*(.58+rng()*.18), cy:H*(.38+rng()*.20), r:Math.min(W,H)*(.13+rng()*.08), spikes:28},
-    {cx:W*(.35+rng()*.12), cy:H*(.65+rng()*.15), r:Math.min(W,H)*(.09+rng()*.05), spikes:22},
-    {cx:W*(.72+rng()*.10), cy:H*(.65+rng()*.12), r:Math.min(W,H)*(.06+rng()*.04), spikes:18},
-    {cx:W*(.80+rng()*.08), cy:H*(.20+rng()*.12), r:Math.min(W,H)*(.05+rng()*.03), spikes:16},
-    {cx:W*(.12+rng()*.08), cy:H*(.45+rng()*.08), r:Math.min(W,H)*(.03+rng()*.02), spikes:12},
-    {cx:W*(.88+rng()*.05), cy:H*(.48+rng()*.08), r:Math.min(W,H)*(.025+rng()*.02),spikes:10},
-  ];
-  // Note: CIV_CENTERS comes from /api/state (backend terrain.py) — same seed, same positions
+  // Use CIV_CENTERS from API as authoritative continent positions
+  // This guarantees agents are always on land — no RNG sync needed
+  const baseSizes = [.18,.13,.09,.06,.05,.03,.025];
+  const baseSpikes = [32,28,22,18,16,12,10];
+  const continents = CIV_CENTERS.map((c, i) => ({
+    cx: c.x * W,
+    cy: c.y * H,
+    r:  Math.min(W,H) * (baseSizes[i] || .04),
+    spikes: baseSpikes[i] || 10
+  }));
 
   continents.forEach(c=>{
     // Shallow water halo
