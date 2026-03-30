@@ -1,5 +1,6 @@
 from fastapi import FastAPI
 from fastapi.responses import HTMLResponse
+from fastapi.staticfiles import StaticFiles
 import sys, os
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 import os
@@ -10,6 +11,10 @@ from world.tech_tree import get_all_discoveries, get_civ_tech_summary, _tier_nam
 import json
 
 app = FastAPI(title="AutoWorld Dashboard")
+
+# Serve CSS/JS as static files
+_web_dir = os.path.join(os.path.dirname(__file__), "../web/static")
+app.mount("/static", StaticFiles(directory=_web_dir), name="static")
 
 @app.on_event("startup")
 def startup():

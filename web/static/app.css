@@ -1,0 +1,150 @@
+@import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700&family=Crimson+Text:ital,wght@0,400;0,600;1,400&display=swap');
+*{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#06080f;--bg2:#0a0e1a;--bg3:#0d1220;
+  --border:#1e2a40;--border2:#2a3a5a;
+  --gold:#c9a84c;--gold2:#e8c96a;--gold3:#f0d88a;
+  --blue:#4a8fd4;--blue2:#6ab0f0;
+  --red:#c44a4a;--red2:#e06060;
+  --green:#4ab870;--green2:#70d890;
+  --purple:#8a4ac4;--purple2:#b070e0;
+  --text:#d8e0ea;--text2:#a0b0c8;--text3:#607080;
+}
+body{background:var(--bg);color:var(--text);font-family:'Crimson Text',serif;min-height:100vh;overflow:hidden}
+
+/* ── Header ── */
+header{
+  background:linear-gradient(180deg,#0f1525 0%,#080c18 100%);
+  border-bottom:1px solid var(--border);
+  padding:10px 20px;display:flex;align-items:center;gap:16px;
+  position:relative;z-index:100;
+  box-shadow:0 2px 20px #000a;
+}
+header h1{font-family:'Cinzel',serif;font-size:1.3rem;color:var(--gold2);letter-spacing:2px;text-shadow:0 0 20px var(--gold)55}
+.badge{
+  background:#0a1020;border:1px solid var(--border2);
+  padding:3px 12px;border-radius:3px;font-size:0.75rem;
+  font-family:'Cinzel',serif;letter-spacing:1px;
+}
+.badge.era{color:var(--gold);border-color:var(--gold)55}
+.badge.year{color:var(--blue2);border-color:var(--blue)55}
+.badge.live{color:var(--green2);border-color:var(--green)55;animation:pulse 2s infinite}
+.stat-row{display:flex;gap:12px;margin-left:auto;align-items:center}
+.hstat{text-align:center}
+.hstat .v{font-family:'Cinzel',serif;font-size:1.1rem;color:var(--gold2)}
+.hstat .l{font-size:0.62rem;color:var(--text3);letter-spacing:1px;text-transform:uppercase}
+
+/* ── Layout ── */
+.layout{display:grid;grid-template-columns:1fr 300px;height:calc(100vh - 52px)}
+.main{overflow:hidden;position:relative}
+.side{border-left:1px solid var(--border);overflow-y:auto;display:flex;flex-direction:column;background:#080c18}
+
+/* ── World Map Canvas ── */
+#worldCanvas{width:100%;height:100%;display:block}
+
+/* ── Map overlay UI ── */
+.map-overlay{position:absolute;top:0;left:0;right:0;bottom:0;pointer-events:none}
+.event-ticker{
+  position:absolute;bottom:0;left:0;right:0;
+  background:linear-gradient(90deg,#000a,#060810cc,#000a);
+  border-top:1px solid var(--border);padding:8px 20px;
+  font-size:0.82rem;color:var(--text2);font-style:italic;
+  white-space:nowrap;overflow:hidden;
+}
+.event-ticker span{animation:ticker 40s linear infinite}
+@keyframes ticker{0%{margin-left:100%}100%{margin-left:-200%}}
+
+.era-overlay{
+  position:absolute;top:14px;left:50%;transform:translateX(-50%);
+  background:#000000aa;border:1px solid var(--gold)44;
+  padding:5px 20px;border-radius:2px;
+  font-family:'Cinzel',serif;font-size:0.8rem;color:var(--gold);letter-spacing:2px;
+  text-shadow:0 0 10px var(--gold)88;pointer-events:none;
+  backdrop-filter:blur(4px);
+}
+
+/* Floating event popup */
+.event-popup{
+  position:absolute;background:#0a1020ee;border:1px solid var(--gold)66;
+  padding:10px 16px;border-radius:4px;max-width:280px;font-size:0.8rem;
+  color:var(--text);backdrop-filter:blur(8px);pointer-events:none;
+  box-shadow:0 4px 20px #000a,0 0 30px var(--gold)22;
+  animation:popIn 0.3s ease,fadeOut 0.5s ease 4.5s forwards;
+  z-index:50;
+}
+@keyframes popIn{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
+@keyframes fadeOut{to{opacity:0}}
+.event-popup .ep-type{font-size:0.65rem;color:var(--gold);letter-spacing:1px;margin-bottom:4px;text-transform:uppercase;font-family:'Cinzel',serif}
+
+/* ── Side Panel ── */
+.side-tabs{display:flex;border-bottom:1px solid var(--border)}
+.side-tab{flex:1;padding:8px;font-size:0.7rem;font-family:'Cinzel',serif;letter-spacing:1px;color:var(--text3);cursor:pointer;text-align:center;border:none;background:none;transition:all .2s;text-transform:uppercase}
+.side-tab:hover{color:var(--gold);background:#ffffff05}
+.side-tab.active{color:var(--gold);border-bottom:2px solid var(--gold);background:#ffffff08}
+.tab-content{display:none;flex:1;overflow-y:auto;padding:12px}
+.tab-content.active{display:block}
+
+/* ── Chronicle (events) ── */
+.chronicle-filters{display:flex;gap:6px;margin-bottom:10px}
+.chronicle-filters input,.chronicle-filters select{
+  background:#0a1020;border:1px solid var(--border2);color:var(--text);
+  padding:4px 8px;border-radius:3px;font-size:0.73rem;outline:none;font-family:'Crimson Text',serif;
+}
+.chronicle-filters input{flex:1}
+.evt{padding:8px 0;border-bottom:1px solid var(--border)55;display:flex;gap:8px}
+.evt:last-child{border:none}
+.evt-icon{font-size:1rem;flex-shrink:0;margin-top:1px}
+.evt-body .desc{font-size:0.8rem;color:var(--text);line-height:1.4}
+.evt-body .meta{font-size:0.67rem;color:var(--text3);margin-top:2px;font-family:'Cinzel',serif;letter-spacing:.5px}
+.evt.epic{border-left:2px solid var(--red);padding-left:8px}
+.evt.gossip{border-left:2px solid var(--purple);padding-left:8px}
+.evt.discovery{border-left:2px solid var(--blue);padding-left:8px}
+.load-more{width:100%;background:#0a1020;border:1px solid var(--border2);color:var(--text3);padding:6px;border-radius:3px;cursor:pointer;font-family:'Cinzel',serif;font-size:0.7rem;letter-spacing:1px;margin-top:8px}
+.load-more:hover{border-color:var(--gold)55;color:var(--gold)}
+
+/* ── Agents ── */
+.agent-card{
+  background:#0a1020;border:1px solid var(--border);border-radius:3px;
+  padding:12px;margin-bottom:8px;cursor:pointer;transition:all .2s;
+}
+.agent-card:hover{border-color:var(--gold)55;background:#0d1530}
+.ac-top{display:flex;gap:10px;align-items:flex-start}
+.ac-avatar{
+  width:38px;height:38px;border-radius:50%;display:flex;align-items:center;justify-content:center;
+  font-size:1.3rem;flex-shrink:0;border:2px solid var(--border2);
+}
+.ac-info .name{font-family:'Cinzel',serif;font-size:0.85rem;color:var(--gold2)}
+.ac-info .job{font-size:0.75rem;color:var(--text2);margin-top:1px}
+.ac-info .civ{font-size:0.68rem;color:var(--text3);margin-top:2px}
+.mood-chip{display:inline-block;font-size:0.65rem;padding:1px 7px;border-radius:10px;margin-top:4px;font-family:'Cinzel',serif;letter-spacing:.5px}
+.rels{margin-top:8px;font-size:0.72rem;color:var(--text3)}
+.rel-tag{display:inline-block;margin:2px;padding:1px 7px;border-radius:10px;font-size:0.65rem;background:#0d1a30;border:1px solid var(--border)}
+
+/* ── Civilizations ── */
+.civ-card{background:#0a1020;border:1px solid var(--border);border-radius:3px;padding:12px;margin-bottom:10px}
+.civ-header{display:flex;align-items:center;gap:8px;margin-bottom:8px}
+.civ-header h3{font-family:'Cinzel',serif;font-size:0.9rem;color:var(--gold2)}
+.civ-status{font-size:0.65rem;padding:2px 8px;border-radius:10px;font-family:'Cinzel',serif;letter-spacing:.5px}
+.status-war{background:#2a0d0d;color:var(--red2);border:1px solid var(--red)55}
+.status-peace{background:#0d2a15;color:var(--green2);border:1px solid var(--green)55}
+.status-growing{background:#0d1a2a;color:var(--blue2);border:1px solid var(--blue)55}
+.tech-bar{height:4px;background:#0a1020;border-radius:2px;margin:6px 0;overflow:hidden}
+.tech-fill{height:100%;border-radius:2px;background:linear-gradient(90deg,var(--purple),var(--blue2));transition:width 1s}
+.tech-chips{display:flex;flex-wrap:wrap;gap:4px;margin-top:6px}
+.tech-chip{background:#1a1035;border:1px solid var(--purple)44;color:var(--purple2);font-size:0.65rem;padding:1px 7px;border-radius:10px}
+.tech-chip.new{border-color:var(--purple);animation:glowPulse 2s infinite}
+@keyframes glowPulse{0%,100%{box-shadow:0 0 4px var(--purple)44}50%{box-shadow:0 0 10px var(--purple)99}}
+
+/* ── Oracle ── */
+.oracle-box{padding:12px;background:#080c18;border-bottom:1px solid var(--border)}
+.oracle-box h3{font-family:'Cinzel',serif;font-size:0.8rem;color:var(--gold);letter-spacing:1px;margin-bottom:8px}
+.oracle-input{width:100%;background:#0a1020;border:1px solid var(--border2);color:var(--text);padding:7px 10px;border-radius:3px;font-family:'Crimson Text',serif;font-size:0.85rem;outline:none}
+.oracle-input:focus{border-color:var(--gold)77}
+.oracle-btns{display:flex;gap:6px;margin-top:6px}
+.oracle-btns button{flex:1;background:#0d1a30;border:1px solid var(--border2);color:var(--text2);padding:6px;border-radius:3px;cursor:pointer;font-family:'Cinzel',serif;font-size:0.68rem;letter-spacing:.5px;transition:all .2s}
+.oracle-btns button:hover{border-color:var(--gold)55;color:var(--gold)}
+.oracle-btns .deep-btn{background:#0d1a10;border-color:var(--green)44;color:var(--green2)}
+.oracle-response{margin-top:10px;padding:10px;background:#060810;border:1px solid var(--border)55;border-radius:3px;font-size:0.82rem;color:var(--text2);line-height:1.6;min-height:60px;font-style:italic}
+
+::-webkit-scrollbar{width:4px}::-webkit-scrollbar-track{background:#06080f}::-webkit-scrollbar-thumb{background:#1e2a40;border-radius:2px}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
