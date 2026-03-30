@@ -201,7 +201,13 @@ DATABASE_URL=postgresql://user:pass@host:5432/dbname
 # Telegram (optional)
 TELEGRAM_TOKEN=bot123:ABC...
 TELEGRAM_CHAT_ID=123456789
+
+# Admin key — protects /api/reset-* endpoints
+ADMIN_KEY=change-me-to-something-secret
 ```
+
+> **Security:** Without `ADMIN_KEY` set, all admin endpoints return `403 Forbidden`.
+> Call them with `-H "X-Admin-Key: your-secret"` in curl/requests.
 
 ---
 
@@ -286,8 +292,8 @@ AutoWorld/
 | `GET /api/lore` | Compressed world lore |
 | `GET /api/tech` | Tech tree status per civilization |
 | `GET /api/ask?q=...&deep=true` | Oracle query |
-| `POST /api/reset-positions` | Re-snap all agents to their continent |
-| `POST /api/reset-terrain-cache` | Force terrain regeneration |
+| `POST /api/reset-positions` | Re-snap all agents to their continent ⚠️ requires `X-Admin-Key` |
+| `POST /api/reset-terrain-cache` | Force terrain regeneration ⚠️ requires `X-Admin-Key` |
 
 ---
 
