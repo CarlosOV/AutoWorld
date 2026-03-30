@@ -134,9 +134,16 @@ def _handle(message: dict):
         if not question:
             _send(chat_id, "¿Qué quieres saber del mundo?"); return
         _send(chat_id, "✨ _Consultando al oráculo..._")
-        deep = any(w in question.lower() for w in ["historia","before","antes","guerra","origin","todo","all"])
-        answer = answer_question(question, deep=deep)
-        _send(chat_id, f"🔮 *{WORLD_NAME}*\n\n{answer}")
+        try:
+            deep = any(w in question.lower() for w in ["historia","before","antes","guerra","origin","todo","all"])
+            answer = answer_question(question, deep=deep)
+            _send(chat_id, f"🔮 *{WORLD_NAME}*\n\n{answer}")
+        except Exception as e:
+            err = str(e)
+            if "RATE_LIMIT" in err:
+                _send(chat_id, "⏳ Límite de requests alcanzado. Intenta en unos minutos.")
+            else:
+                _send(chat_id, f"⚠️ El oráculo no puede responder ahora: {err[:100]}")
 
 
 def _drain_pending() -> int:

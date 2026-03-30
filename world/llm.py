@@ -32,6 +32,9 @@ def ask_llm(prompt: str, system: str = "", max_tokens: int = 500, language: str 
         json=payload,
         timeout=120,
     )
+    if resp.status_code == 429:
+        retry_after = int(resp.headers.get("Retry-After", 60))
+        raise Exception(f"RATE_LIMIT:{retry_after}:{resp.text}")
     if not resp.ok:
         raise Exception(f"OpenRouter error {resp.status_code}: {resp.text}")
 

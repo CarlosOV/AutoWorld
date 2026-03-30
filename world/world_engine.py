@@ -138,6 +138,18 @@ Respond ONLY with valid JSON:
     print(f"[tick] 👶 New agent born: {data['name']}")
 
 def world_tick():
+    try:
+        _world_tick_inner()
+    except Exception as e:
+        err = str(e)
+        if err.startswith("RATE_LIMIT:"):
+            parts = err.split(":", 2)
+            wait  = parts[1] if len(parts) > 1 else "unknown"
+            print(f"[tick] ⏳ Rate limit hit — skipping tick, resets in {wait}s. World continues next tick.")
+        else:
+            print(f"[tick] ⚠️ Tick failed (world keeps running): {err}")
+
+def _world_tick_inner():
     print(f"[tick] === World tick for {WORLD_NAME} ===")
     agents = get_all_agents()
     if not agents:

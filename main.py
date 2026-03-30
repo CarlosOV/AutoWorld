@@ -47,10 +47,17 @@ def cmd_start():
     start_bot()
     print(f"🤖 Telegram bot active")
 
+    def safe_tick():
+        try:
+            world_tick()
+        except Exception as e:
+            print(f"[scheduler] Tick error (world keeps running): {e}")
+
     scheduler = BlockingScheduler()
-    scheduler.add_job(world_tick, "interval", minutes=TICK_INTERVAL)
+    scheduler.add_job(safe_tick, "interval", minutes=TICK_INTERVAL,
+                      misfire_grace_time=300, coalesce=True)
     print("World is running. Press Ctrl+C to stop.\n")
-    world_tick()  # run first tick immediately
+    safe_tick()  # run first tick immediately
     scheduler.start()
 
 
