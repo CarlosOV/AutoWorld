@@ -2,7 +2,8 @@ from fastapi import FastAPI
 from fastapi.responses import HTMLResponse
 import sys, os
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
-from world.memory import init_db, get_all_agents, get_recent_events, get_world_state
+from typing import Optional
+from world.memory import init_db, get_all_agents, get_recent_events, get_events, get_agent_history, get_world_state, get_event_count
 from world.world_engine import answer_question
 from world.tech_tree import get_all_discoveries, get_civ_tech_summary, _tier_name, _get_civ_tier, _get_discovered
 import json
@@ -43,9 +44,38 @@ def get_state():
     }
 
 @app.get("/api/ask")
-def ask(q: str):
-    answer = answer_question(q)
+def ask(q: str, deep: bool = False):
+    answer = answer_question(q, deep=deep)
     return {"answer": answer}
+
+@app.get("/api/events")
+def events(
+    limit: int = 50,
+    offset: int = 0,
+    type: Optional[str] = None,
+    search: Optional[str] = None,
+):
+    """Full event history — all data, paginated. Nothing is hidden."""
+    rows = get_events(limit=limit, offset=offset, type_filter=type, search=search)
+    total = get_event_count()
+    return {"total": total, "offset": offset, "limit": limit, "events": rows}
+
+@app.get("/api/agents/{name}/history")
+def agent_history(name: str, limit: int = 50):
+    """Full event history for a specific agent."""
+    rows = get_agent_history(agent_name=name, limit=limit)
+    return {"agent": name, "total": len(rows), "events": rows}
+
+@app.get("/api/lore")
+def lore():
+    """Compressed world lore + raw stats."""
+    return {
+        "lore": get_world_state("lore_summary", ""),
+        "total_events": get_event_count(),
+        "last_compressed_at": get_world_state("last_compress_at", "0"),
+        "era": get_world_state("era", "Primordial Age"),
+        "year": get_world_state("world_year", "Year 1"),
+    }
 
 @app.get("/api/tech")
 def tech_summary():

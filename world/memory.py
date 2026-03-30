@@ -118,6 +118,45 @@ def get_event_count() -> int:
     conn.close()
     return row[0]
 
+def get_events(limit: int = 50, offset: int = 0, type_filter: str = None, search: str = None) -> list[dict]:
+    """Full event history with optional filtering. All data preserved."""
+    ph = _ph()
+    clauses, params = [], []
+    if type_filter:
+        clauses.append(f"type = {ph}")
+        params.append(type_filter)
+    if search:
+        clauses.append(f"description ILIKE {ph}" if DATABASE_URL else f"description LIKE {ph}")
+        params.append(f"%{search}%")
+    where = ("WHERE " + " AND ".join(clauses)) if clauses else ""
+    if DATABASE_URL:
+        params += [limit, offset]
+        query = f"SELECT id, timestamp, type, description, agents_involved FROM events {where} ORDER BY id DESC LIMIT %s OFFSET %s"
+    else:
+        params += [limit, offset]
+        query = f"SELECT id, timestamp, type, description, agents_involved FROM events {where} ORDER BY id DESC LIMIT ? OFFSET ?"
+    conn = _get_conn()
+    rows = conn.execute(query, params).fetchall()
+    conn.close()
+    return [{"id": r[0], "ts": r[1], "type": r[2], "desc": r[3], "agents": json.loads(r[4])} for r in rows]
+
+def get_agent_history(agent_name: str, limit: int = 50) -> list[dict]:
+    """All events involving a specific agent."""
+    ph = _ph()
+    conn = _get_conn()
+    if DATABASE_URL:
+        rows = conn.execute(
+            "SELECT id, timestamp, type, description, agents_involved FROM events WHERE agents_involved LIKE %s ORDER BY id DESC LIMIT %s",
+            (f"%{agent_name}%", limit)
+        ).fetchall()
+    else:
+        rows = conn.execute(
+            "SELECT id, timestamp, type, description, agents_involved FROM events WHERE agents_involved LIKE ? ORDER BY id DESC LIMIT ?",
+            (f"%{agent_name}%", limit)
+        ).fetchall()
+    conn.close()
+    return [{"id": r[0], "ts": r[1], "type": r[2], "desc": r[3], "agents": json.loads(r[4])} for r in rows]
+
 # --- World State (key/value) ---
 def set_world_state(key: str, value: str):
     conn = _get_conn()

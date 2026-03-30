@@ -125,9 +125,25 @@
     <div class="event-feed">
       <div class="event-feed-header">
         <span>📜 Chronicle of Events</span>
-        <span id="event-count" style="color:#5a7a9a">0 events</span>
+        <div style="display:flex;gap:8px;align-items:center">
+          <input id="search-events" placeholder="search..." style="background:#0d1628;border:1px solid #2a3a5a;color:#e0e6f0;padding:3px 8px;border-radius:6px;font-size:0.75rem;width:120px;outline:none" oninput="searchEvents(this.value)">
+          <select id="filter-type" onchange="searchEvents(document.getElementById('search-events').value)" style="background:#0d1628;border:1px solid #2a3a5a;color:#7a9aba;padding:3px 6px;border-radius:6px;font-size:0.72rem;outline:none">
+            <option value="">all types</option>
+            <option value="world_event">world event</option>
+            <option value="agent_reaction">reaction</option>
+            <option value="war">war</option>
+            <option value="discovery">discovery</option>
+            <option value="birth">birth</option>
+            <option value="era_change">era change</option>
+          </select>
+          <span id="event-count" style="color:#5a7a9a;white-space:nowrap">0 events</span>
+        </div>
       </div>
       <div class="event-list" id="event-list"></div>
+      <div style="padding:8px 16px;border-top:1px solid #131c30;display:flex;gap:8px;align-items:center">
+        <button onclick="loadMoreEvents()" id="load-more-btn" style="background:#0d1e35;border:1px solid #1e3050;color:#5a8abf;padding:5px 14px;border-radius:6px;cursor:pointer;font-size:0.75rem">Load more</button>
+        <span id="showing-count" style="font-size:0.72rem;color:#3a5070"></span>
+      </div>
     </div>
   </div>
 
@@ -136,7 +152,10 @@
     <div class="oracle">
       <h2>🔮 Ask the Oracle</h2>
       <input type="text" id="oracle-input" placeholder="¿Qué pasó hoy?" onkeydown="if(event.key==='Enter')askOracle()">
-      <button onclick="askOracle()">Ask the World</button>
+      <div style="display:flex;gap:6px;margin-top:8px">
+        <button onclick="askOracle(false)" style="flex:1">Ask</button>
+        <button onclick="askOracle(true)" title="Searches full history" style="background:#1a2d10;border-color:#2a4a18;color:#8afa60">🔍 Deep</button>
+      </div>
       <div class="oracle-response" id="oracle-response">The oracle awaits your question...</div>
     </div>
 
@@ -297,21 +316,66 @@ function hashCode(s) {
   return Math.abs(h);
 }
 
-async function askOracle() {
+async function askOracle(deep = false) {
   const q = document.getElementById('oracle-input').value.trim();
   if (!q) return;
   const el = document.getElementById('oracle-response');
-  el.textContent = '✨ The oracle is consulting the ancient tomes...';
+  el.textContent = deep ? '🔍 Searching the full chronicles...' : '✨ The oracle is consulting the ancient tomes...';
   try {
-    const res = await fetch('/api/ask?q=' + encodeURIComponent(q));
+    const res = await fetch(`/api/ask?q=${encodeURIComponent(q)}&deep=${deep}`);
     const d = await res.json();
     el.textContent = d.answer;
   } catch(e) { el.textContent = 'The oracle is silent...'; }
 }
 
+// --- Full history browser ---
+let eventsOffset = 0;
+const EVENTS_PAGE = 30;
+let currentSearch = '', currentType = '';
+
+async function searchEvents(q) {
+  eventsOffset = 0;
+  currentSearch = q;
+  currentType = document.getElementById('filter-type').value;
+  await loadEvents(true);
+}
+
+async function loadMoreEvents() {
+  eventsOffset += EVENTS_PAGE;
+  await loadEvents(false);
+}
+
+async function loadEvents(reset = true) {
+  const params = new URLSearchParams({
+    limit: EVENTS_PAGE, offset: eventsOffset,
+    ...(currentType && {type: currentType}),
+    ...(currentSearch && {search: currentSearch}),
+  });
+  const res = await fetch('/api/events?' + params);
+  const d = await res.json();
+  document.getElementById('event-count').textContent = d.total + ' total';
+  document.getElementById('showing-count').textContent = `showing ${Math.min(eventsOffset + EVENTS_PAGE, d.total)} of ${d.total}`;
+  document.getElementById('load-more-btn').style.display = eventsOffset + EVENTS_PAGE >= d.total ? 'none' : 'inline';
+  if (reset) {
+    renderEvents(d.events);
+  } else {
+    const el = document.getElementById('event-list');
+    el.innerHTML += d.events.map(e => {
+      const icon = EVENT_ICONS[e.type] || EVENT_ICONS.default;
+      const isEpic = EPIC_WORDS.some(w => e.desc?.toLowerCase().includes(w));
+      return `<div class="event-item ${isEpic?'epic':''}">
+        <span class="event-icon">${icon}</span>
+        <div><div class="event-text">${e.desc||''}</div><div class="event-time">${(e.ts||'').replace('T',' ').slice(0,16)}</div></div>
+      </div>`;
+    }).join('');
+  }
+}
+
 // Auto-refresh every 60s
 fetchState();
 setInterval(fetchState, 60000);
+// Load initial full event list
+loadEvents();
 </script>
 </body>
 </html>

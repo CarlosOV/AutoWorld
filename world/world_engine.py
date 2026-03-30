@@ -6,7 +6,7 @@ from .memory import get_all_agents, log_event, save_agent, get_recent_events, ge
 from .agent import agent_react, generate_agent
 from .notifier import notify
 from .tech_tree import maybe_discover, get_all_discoveries, get_civ_tech_summary
-from .context_manager import get_world_context, trim_agent_memories, maybe_compress_lore
+from .context_manager import get_world_context, get_deep_context, trim_agent_memories, maybe_compress_lore
 
 WORLD_NAME = os.getenv("WORLD_NAME", "Aethoria")
 NUM_AGENTS = int(os.getenv("NUM_AGENTS", "5"))
@@ -209,38 +209,51 @@ Generate ONE interesting event happening right now. 2-3 sentences. No JSON.
 
     print(f"[tick] Done. World year {year}.")
 
-def answer_question(question: str) -> str:
+def answer_question(question: str, deep: bool = False) -> str:
+    """
+    Answer a question about the world.
+    deep=True: pulls extended event history from DB for detailed queries.
+    deep is auto-detected from question keywords.
+    """
     agents = get_all_agents()
     civs = _get_civilizations()
-    ctx = get_world_context()
 
-    # Keep agent list compact
+    # Auto-detect if question needs deep history
+    deep_keywords = ["history", "historia", "before", "antes", "how did", "cómo fue",
+                     "when did", "cuándo", "all", "todo", "war", "guerra", "origin",
+                     "origen", "first", "primero", "discovery", "descubrimiento"]
+    needs_deep = deep or any(kw in question.lower() for kw in deep_keywords)
+
+    ctx = get_deep_context(extra_events=40) if needs_deep else get_world_context()
+
     agents_summary = "\n".join([
         f"- {a['name']} ({a.get('occupation','?')}, civ: {a.get('civ','—')})"
-        for a in agents[:12]  # cap at 12 to avoid bloat
+        for a in agents[:12]
     ])
     civs_summary = "\n".join([
         f"- {c['name']}: capital {c.get('capital','?')}, status: {c.get('status','?')}, tech: {c.get('tech_tier_name','?')}"
         for c in civs
     ]) or "No civilizations yet."
 
+    history_section = ctx.get("extended", ctx["recent"]) if needs_deep else ctx["recent"]
+
     prompt = f"""
 You are the omniscient narrator of "{WORLD_NAME}".
 {ctx['year']} | Era: {ctx['era']}
 
-LORE: {ctx['lore'] or '(world is young)'}
+LORE (compressed history): {ctx['lore'] or '(world is young)'}
 
 CIVILIZATIONS:
 {civs_summary}
 
-INHABITANTS (sample):
+INHABITANTS:
 {agents_summary}
 
-RECENT EVENTS:
-{ctx['recent']}
+{'FULL HISTORY' if needs_deep else 'RECENT EVENTS'}:
+{history_section}
 
 QUESTION: "{question}"
 
-Answer as a vivid world narrator. Max 3 paragraphs.
+Answer as a vivid world narrator. Max 3 paragraphs. Be specific with names and dates.
 """
-    return ask_llm(prompt, max_tokens=400)
+    return ask_llm(prompt, max_tokens=500)

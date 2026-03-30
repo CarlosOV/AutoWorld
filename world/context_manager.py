@@ -2,13 +2,15 @@
 Context Manager — keeps LLM prompts lean.
 
 Strategy:
-- Keep last RECENT_EVENTS_WINDOW events in full detail
+- Keep last RECENT_EVENTS_WINDOW events in full detail for normal prompts
 - Older events are periodically compressed into a "World Lore" summary stored in DB
 - Agent memories are capped at AGENT_MEMORY_CAP entries
-- Total context per prompt: ~800-1200 tokens max
+- For deep queries, caller can request extended context (get_deep_context)
+- Total context per normal prompt: ~800-1200 tokens max
+- ALL data is always preserved in DB — compression only affects what goes to LLM
 """
 import os
-from .memory import get_recent_events, get_world_state, set_world_state, get_event_count
+from .memory import get_recent_events, get_events, get_world_state, set_world_state, get_event_count
 from .llm import ask_llm
 
 RECENT_EVENTS_WINDOW = int(os.getenv("RECENT_EVENTS_WINDOW", "8"))   # full-detail events in prompts
@@ -47,6 +49,20 @@ def trim_agent_memories(agent: dict) -> dict:
         # Keep first entry (origin) + last N-1
         agent["memories"] = [memories[0]] + memories[-(AGENT_MEMORY_CAP - 1):]
     return agent
+
+def get_deep_context(extra_events: int = 40) -> dict:
+    """
+    Extended context for deep oracle queries.
+    Pulls lore + more events from DB — use only when needed.
+    """
+    ctx = get_world_context()
+    extended = get_events(limit=extra_events)
+    extended_text = "\n".join(
+        f"[{e['ts'][:16]}] ({e['type']}) {e['desc'][:150]}"
+        for e in reversed(extended)
+    )
+    ctx["extended"] = extended_text
+    return ctx
 
 def maybe_compress_lore(world_name: str):
     """
