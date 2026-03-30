@@ -29,9 +29,13 @@ function render(d) {
     window._worldName = newSeed;
     terrainCache = null; terrainSeed = 0; // regenerate terrain
   }
-  // Always sync CIV_CENTERS from API (authoritative, matches backend)
+  // Always sync CIV_CENTERS from API — if they changed, invalidate terrain cache
   if (d.continent_centers && d.continent_centers.length) {
-    CIV_CENTERS = d.continent_centers;
+    const incoming = JSON.stringify(d.continent_centers);
+    if (incoming !== JSON.stringify(CIV_CENTERS)) {
+      CIV_CENTERS = d.continent_centers;
+      terrainCache = null; terrainSeed = 0; // redraw with correct centers
+    }
   }
   document.getElementById('world-title').textContent = '🌍 ' + wname;
   document.title = '🌍 ' + wname;

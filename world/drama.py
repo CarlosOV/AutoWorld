@@ -43,7 +43,7 @@ def ensure_positions(agents: list, civilizations: list = None) -> tuple:
                 for c in centers
             )
             # If farther than blob radius from nearest continent, snap back home
-            if min_dist > 0.18 and a.get("movement_mode") != "expedition":
+            if min_dist > 0.10 and a.get("movement_mode") != "expedition":
                 needs_pos = True
         if needs_pos:
             x, y = nearest_land_position(home["x"], home["y"], centers,
@@ -90,23 +90,20 @@ def move_agents(agents: list, civilizations: list = None) -> list:
                 log_event("expedition", f"🚢 {a['name']} arrived at a distant land after a long expedition.", [a["name"]])
 
         elif mode == "wandering":
-            # Larger drift, still loosely tied to home continent
-            dx = random.uniform(-0.03, 0.03)
-            dy = random.uniform(-0.025, 0.025)
-            # Soft pull toward home if too far
-            dist_home = ((cx - home["x"])**2 + (cy - home["y"])**2) ** 0.5
-            if dist_home > 0.14:
-                dx += (home["x"] - cx) * 0.15
-                dy += (home["y"] - cy) * 0.15
-
-        else:  # settled
-            # Small daily movement, strongly bound to home continent
-            dx = random.uniform(-0.012, 0.012)
-            dy = random.uniform(-0.010, 0.010)
+            dx = random.uniform(-0.015, 0.015)
+            dy = random.uniform(-0.012, 0.012)
             dist_home = ((cx - home["x"])**2 + (cy - home["y"])**2) ** 0.5
             if dist_home > 0.07:
-                dx += (home["x"] - cx) * 0.25
-                dy += (home["y"] - cy) * 0.25
+                dx += (home["x"] - cx) * 0.30
+                dy += (home["y"] - cy) * 0.30
+
+        else:  # settled
+            dx = random.uniform(-0.007, 0.007)
+            dy = random.uniform(-0.006, 0.006)
+            dist_home = ((cx - home["x"])**2 + (cy - home["y"])**2) ** 0.5
+            if dist_home > 0.05:
+                dx += (home["x"] - cx) * 0.40
+                dy += (home["y"] - cy) * 0.40
 
         a["x"] = round(max(0.02, min(0.98, cx + dx)), 3)
         a["y"] = round(max(0.02, min(0.98, cy + dy)), 3)
