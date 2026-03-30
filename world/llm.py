@@ -15,16 +15,31 @@ def ask_llm(prompt: str, system: str = "", max_tokens: int = 500) -> str:
         messages.append({"role": "system", "content": system})
     messages.append({"role": "user", "content": prompt})
 
+    # Reasoning models need extra tokens (they think before answering)
+    effective_tokens = max(max_tokens, 1500)
+
     resp = requests.post(
         "https://openrouter.ai/api/v1/chat/completions",
         headers=headers,
-        json={"model": DEFAULT_MODEL, "messages": messages, "max_tokens": max_tokens},
-        timeout=30,
+        json={"model": DEFAULT_MODEL, "messages": messages, "max_tokens": effective_tokens},
+        timeout=60,
     )
     if not resp.ok:
         raise Exception(f"OpenRouter error {resp.status_code}: {resp.text}")
+
     data = resp.json()
-    content = data.get("choices", [{}])[0].get("message", {}).get("content")
+    message = data.get("choices", [{}])[0].get("message", {})
+    content = message.get("content")
+
+    # Fallback: some reasoning models put output only in 'reasoning' when tokens run out
     if not content:
-        raise Exception(f"Empty response from model. Full response: {data}")
+        reasoning = message.get("reasoning") or ""
+        # Try to extract JSON from reasoning as last resort
+        start = reasoning.rfind("{")
+        end = reasoning.rfind("}") + 1
+        if start >= 0 and end > start:
+            content = reasoning[start:end]
+        else:
+            raise Exception(f"Model returned no content. finish_reason: {data.get('choices',[{}])[0].get('finish_reason')}")
+
     return content.strip()
