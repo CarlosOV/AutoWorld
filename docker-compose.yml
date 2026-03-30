@@ -1,9 +1,42 @@
 version: "3.9"
+
 services:
-  autoworld:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: autoworld
+      POSTGRES_USER: autoworld
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-changeme}
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U autoworld"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  app:
     build: .
     restart: unless-stopped
-    volumes:
-      - ./world.db:/app/world.db
-      - ./.env:/app/.env
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://autoworld:${POSTGRES_PASSWORD:-changeme}@db:5432/autoworld
+      OPENROUTER_API_KEY: ${OPENROUTER_API_KEY}
+      WORLD_NAME: ${WORLD_NAME:-Aethoria}
+      NUM_AGENTS: ${NUM_AGENTS:-5}
+      TICK_INTERVAL: ${TICK_INTERVAL:-30}
+      LLM_MODEL: ${LLM_MODEL:-mistralai/mistral-7b-instruct:free}
+      WEB_PORT: ${WEB_PORT:-8000}
+      TELEGRAM_TOKEN: ${TELEGRAM_TOKEN:-}
+      TELEGRAM_CHAT_ID: ${TELEGRAM_CHAT_ID:-}
+      RECENT_EVENTS_WINDOW: ${RECENT_EVENTS_WINDOW:-8}
+      COMPRESS_EVERY: ${COMPRESS_EVERY:-30}
+    ports:
+      - "${WEB_PORT:-8000}:8000"
     command: python main.py start
+
+volumes:
+  pg_data:

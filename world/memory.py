@@ -1,75 +1,143 @@
-import sqlite3
+"""
+Memory layer — PostgreSQL (prod) or SQLite (local dev).
+Set DATABASE_URL=postgresql://user:pass@host/db for Postgres.
+Falls back to SQLite (world.db) if not set.
+"""
+import os
 import json
 from datetime import datetime
-from pathlib import Path
 
-DB_PATH = Path("world.db")
+DATABASE_URL = os.getenv("DATABASE_URL", "")
 
+# --- Driver selection ---
+def _get_conn():
+    if DATABASE_URL:
+        import psycopg2
+        return psycopg2.connect(DATABASE_URL)
+    else:
+        import sqlite3
+        return sqlite3.connect("world.db")
+
+def _ph():
+    """Placeholder: %s for postgres, ? for sqlite."""
+    return "%s" if DATABASE_URL else "?"
+
+# --- Schema ---
 def init_db():
-    conn = sqlite3.connect(DB_PATH)
+    conn = _get_conn()
     c = conn.cursor()
-    c.executescript("""
+    ph = _ph()
+    # Use TEXT for both backends (Postgres supports it fine)
+    c.execute("""
+        CREATE TABLE IF NOT EXISTS agents (
+            id SERIAL PRIMARY KEY,
+            name TEXT UNIQUE NOT NULL,
+            data TEXT NOT NULL
+        )
+    """ if DATABASE_URL else """
         CREATE TABLE IF NOT EXISTS agents (
             id INTEGER PRIMARY KEY,
-            name TEXT UNIQUE,
-            data TEXT  -- JSON blob
-        );
+            name TEXT UNIQUE NOT NULL,
+            data TEXT NOT NULL
+        )
+    """)
+    c.execute("""
+        CREATE TABLE IF NOT EXISTS events (
+            id SERIAL PRIMARY KEY,
+            timestamp TEXT NOT NULL,
+            type TEXT NOT NULL,
+            description TEXT NOT NULL,
+            agents_involved TEXT NOT NULL DEFAULT '[]'
+        )
+    """ if DATABASE_URL else """
         CREATE TABLE IF NOT EXISTS events (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
-            timestamp TEXT,
-            type TEXT,
-            description TEXT,
-            agents_involved TEXT  -- JSON list of names
-        );
+            timestamp TEXT NOT NULL,
+            type TEXT NOT NULL,
+            description TEXT NOT NULL,
+            agents_involved TEXT NOT NULL DEFAULT '[]'
+        )
+    """)
+    c.execute("""
         CREATE TABLE IF NOT EXISTS world_state (
             key TEXT PRIMARY KEY,
-            value TEXT
-        );
+            value TEXT NOT NULL
+        )
     """)
     conn.commit()
     conn.close()
 
+# --- Agents ---
 def save_agent(name: str, data: dict):
-    conn = sqlite3.connect(DB_PATH)
-    conn.execute(
-        "INSERT OR REPLACE INTO agents (name, data) VALUES (?, ?)",
-        (name, json.dumps(data))
-    )
+    ph = _ph()
+    conn = _get_conn()
+    if DATABASE_URL:
+        conn.cursor().execute(
+            "INSERT INTO agents (name, data) VALUES (%s, %s) ON CONFLICT (name) DO UPDATE SET data=EXCLUDED.data",
+            (name, json.dumps(data))
+        )
+    else:
+        conn.cursor().execute(
+            "INSERT OR REPLACE INTO agents (name, data) VALUES (?, ?)",
+            (name, json.dumps(data))
+        )
     conn.commit()
     conn.close()
 
 def get_all_agents() -> list[dict]:
-    conn = sqlite3.connect(DB_PATH)
+    conn = _get_conn()
     rows = conn.execute("SELECT name, data FROM agents").fetchall()
     conn.close()
     return [{"name": r[0], **json.loads(r[1])} for r in rows]
 
+# --- Events ---
 def log_event(type_: str, description: str, agents: list[str] = None):
-    conn = sqlite3.connect(DB_PATH)
-    conn.execute(
-        "INSERT INTO events (timestamp, type, description, agents_involved) VALUES (?,?,?,?)",
+    ph = _ph()
+    conn = _get_conn()
+    conn.cursor().execute(
+        f"INSERT INTO events (timestamp, type, description, agents_involved) VALUES ({ph},{ph},{ph},{ph})",
         (datetime.utcnow().isoformat(), type_, description, json.dumps(agents or []))
     )
     conn.commit()
     conn.close()
 
 def get_recent_events(limit: int = 20) -> list[dict]:
-    conn = sqlite3.connect(DB_PATH)
+    conn = _get_conn()
     rows = conn.execute(
+        "SELECT timestamp, type, description, agents_involved FROM events ORDER BY id DESC LIMIT %s" % limit
+        if DATABASE_URL else
         "SELECT timestamp, type, description, agents_involved FROM events ORDER BY id DESC LIMIT ?",
-        (limit,)
+        () if DATABASE_URL else (limit,)
     ).fetchall()
     conn.close()
     return [{"ts": r[0], "type": r[1], "desc": r[2], "agents": json.loads(r[3])} for r in rows]
 
+def get_event_count() -> int:
+    conn = _get_conn()
+    row = conn.execute("SELECT COUNT(*) FROM events").fetchone()
+    conn.close()
+    return row[0]
+
+# --- World State (key/value) ---
 def set_world_state(key: str, value: str):
-    conn = sqlite3.connect(DB_PATH)
-    conn.execute("INSERT OR REPLACE INTO world_state (key, value) VALUES (?,?)", (key, value))
+    conn = _get_conn()
+    if DATABASE_URL:
+        conn.cursor().execute(
+            "INSERT INTO world_state (key, value) VALUES (%s, %s) ON CONFLICT (key) DO UPDATE SET value=EXCLUDED.value",
+            (key, value)
+        )
+    else:
+        conn.cursor().execute(
+            "INSERT OR REPLACE INTO world_state (key, value) VALUES (?, ?)", (key, value)
+        )
     conn.commit()
     conn.close()
 
 def get_world_state(key: str, default: str = "") -> str:
-    conn = sqlite3.connect(DB_PATH)
-    row = conn.execute("SELECT value FROM world_state WHERE key=?", (key,)).fetchone()
+    ph = _ph()
+    conn = _get_conn()
+    row = conn.execute(
+        f"SELECT value FROM world_state WHERE key={ph}", (key,)
+    ).fetchone()
     conn.close()
     return row[0] if row else default

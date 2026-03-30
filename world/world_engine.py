@@ -6,6 +6,7 @@ from .memory import get_all_agents, log_event, save_agent, get_recent_events, ge
 from .agent import agent_react, generate_agent
 from .notifier import notify
 from .tech_tree import maybe_discover, get_all_discoveries, get_civ_tech_summary
+from .context_manager import get_world_context, trim_agent_memories, maybe_compress_lore
 
 WORLD_NAME = os.getenv("WORLD_NAME", "Aethoria")
 NUM_AGENTS = int(os.getenv("NUM_AGENTS", "5"))
@@ -161,21 +162,22 @@ def world_tick():
     # Refresh agents after possible changes
     agents = get_all_agents()
 
-    # Generate world event
-    recent = get_recent_events(5)
-    recent_str = "; ".join([e["desc"][:80] for e in recent]) if recent else "nada aún"
+    # Compress lore if needed (keeps future prompts lean)
+    maybe_compress_lore(WORLD_NAME)
+
+    # Build lean world context
+    ctx = get_world_context()
     civs = _get_civilizations()
-    civs_str = ", ".join([f"{c['name']} ({c['status']})" for c in civs]) if civs else "ninguna"
+    civs_str = ", ".join([f"{c['name']} ({c['status']})" for c in civs]) if civs else "none"
 
     event_prompt = f"""
-World: {WORLD_NAME} | Year {year} | Era: {get_world_state('era','Primordial Age')}
+World: {WORLD_NAME} | {ctx['year']} | Era: {ctx['era']}
 Civilizations: {civs_str}
-Recent events: {recent_str}
+{f"World Lore: {ctx['lore']}" if ctx['lore'] else ""}
+Recent events:
+{ctx['recent']}
 
-Generate ONE interesting event that happens right now in this world. 
-It can involve inhabitants, civilizations, nature, discoveries, conflicts.
-2-3 sentences. Be creative and consistent with the world history.
-Respond with just the event narrative.
+Generate ONE interesting event happening right now. 2-3 sentences. No JSON.
 """
     event_desc = ask_llm(event_prompt, max_tokens=200)
     print(f"[tick] Event: {event_desc[:80]}...")
@@ -187,11 +189,11 @@ Respond with just the event narrative.
     # Agent reactions (1-2 agents)
     reactors = random.sample(agents, k=min(2, len(agents)))
     for agent in reactors:
+        agent = trim_agent_memories(agent)
         reaction = agent_react(agent, event_desc, WORLD_NAME)
         log_event("agent_reaction", f"{agent['name']}: {reaction}", [agent["name"]])
-        memories = agent.get("memories", [])
-        memories.append(f"Year {year}: {event_desc[:80]}")
-        agent["memories"] = memories[-20:]
+        agent["memories"] = agent.get("memories", []) + [f"Year {year}: {event_desc[:80]}"]
+        agent = trim_agent_memories(agent)
         save_agent(agent["name"], agent)
 
     # Tech discoveries
@@ -209,39 +211,36 @@ Respond with just the event narrative.
 
 def answer_question(question: str) -> str:
     agents = get_all_agents()
-    events = get_recent_events(15)
     civs = _get_civilizations()
-    era = get_world_state("era", "Primordial Age")
-    year = get_world_state("world_year", "Year 1")
+    ctx = get_world_context()
 
+    # Keep agent list compact
     agents_summary = "\n".join([
-        f"- {a['name']} ({a.get('occupation','?')}, civ: {a.get('civ','none')})"
-        for a in agents
+        f"- {a['name']} ({a.get('occupation','?')}, civ: {a.get('civ','—')})"
+        for a in agents[:12]  # cap at 12 to avoid bloat
     ])
     civs_summary = "\n".join([
-        f"- {c['name']}: capital {c.get('capital','?')}, pop {c.get('population','?')}, status: {c.get('status','?')}"
+        f"- {c['name']}: capital {c.get('capital','?')}, status: {c.get('status','?')}, tech: {c.get('tech_tier_name','?')}"
         for c in civs
     ]) or "No civilizations yet."
-    events_summary = "\n".join([
-        f"[{e['ts'][:16]}] {e['desc'][:120]}"
-        for e in reversed(events)
-    ])
 
     prompt = f"""
-You are the omniscient narrator of the world "{WORLD_NAME}".
-Current: {year} | Era: {era}
+You are the omniscient narrator of "{WORLD_NAME}".
+{ctx['year']} | Era: {ctx['era']}
+
+LORE: {ctx['lore'] or '(world is young)'}
 
 CIVILIZATIONS:
 {civs_summary}
 
-INHABITANTS:
+INHABITANTS (sample):
 {agents_summary}
 
-RECENT HISTORY:
-{events_summary}
+RECENT EVENTS:
+{ctx['recent']}
 
-Observer's question: "{question}"
+QUESTION: "{question}"
 
-Answer as a dramatic world narrator. Max 3 paragraphs. Be vivid and engaging.
+Answer as a vivid world narrator. Max 3 paragraphs.
 """
     return ask_llm(prompt, max_tokens=400)
