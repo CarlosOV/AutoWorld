@@ -8,6 +8,7 @@ import json
 from .llm import ask_llm
 from .memory import get_all_agents, save_agent, log_event, get_world_state
 from .notifier import notify
+from .terrain import get_continent_centers, nearest_land_position
 
 WORLD_NAME = os.getenv("WORLD_NAME", "Aethoria")
 
@@ -20,24 +21,52 @@ def _rand_pos(seed: int, bounds: tuple = (0.05, 0.95)) -> float:
     lo, hi = bounds
     return lo + (h % 10000) / 10000 * (hi - lo)
 
-def ensure_positions(agents: list) -> list:
-    """Give every agent an (x, y) position if they don't have one yet."""
+def ensure_positions(agents: list, civilizations: list = None) -> tuple:
+    """Give every agent an (x, y) position on their civilization's continent."""
+    world_seed = get_world_state("world_seed", "default")
+    centers = get_continent_centers(world_seed)
+    civs = civilizations or []
     changed = False
+
     for i, a in enumerate(agents):
         if "x" not in a or "y" not in a:
-            a["x"] = round(_rand_pos(hash(a["name"]) + i), 3)
-            a["y"] = round(_rand_pos(hash(a["name"]) * 3 + i), 3)
+            civ_index = next((j for j, c in enumerate(civs) if c.get("name") == a.get("civ")), i % len(centers))
+            center = centers[civ_index % len(centers)]
+            x, y = nearest_land_position(center["x"], center["y"], centers,
+                                          spread=0.07, agent_index=i)
+            a["x"] = x
+            a["y"] = y
             changed = True
     return agents, changed
 
-def move_agents(agents: list) -> list:
-    """Slightly move agents each tick — they wander the world."""
-    for a in agents:
-        # Move toward civ capital area or random drift
-        dx = random.uniform(-0.04, 0.04)
-        dy = random.uniform(-0.04, 0.04)
-        a["x"] = round(max(0.03, min(0.97, a.get("x", 0.5) + dx)), 3)
-        a["y"] = round(max(0.03, min(0.97, a.get("y", 0.5) + dy)), 3)
+def move_agents(agents: list, civilizations: list = None) -> list:
+    """Move agents each tick — they wander near their civilization's continent."""
+    world_seed = get_world_state("world_seed", "default")
+    centers = get_continent_centers(world_seed)
+    civs = civilizations or []
+
+    for i, a in enumerate(agents):
+        civ_index = next((j for j, c in enumerate(civs) if c.get("name") == a.get("civ")), i % len(centers))
+        center = centers[civ_index % len(centers)]
+
+        # Small drift around current position, clamped to continent area
+        dx = random.uniform(-0.025, 0.025)
+        dy = random.uniform(-0.020, 0.020)
+        new_x = a.get("x", center["x"]) + dx
+        new_y = a.get("y", center["y"]) + dy
+
+        # Pull back toward continent center if drifting too far (land boundary)
+        spread = 0.12
+        dist_x = new_x - center["x"]
+        dist_y = new_y - center["y"]
+        dist = (dist_x**2 + (dist_y/0.7)**2) ** 0.5
+        if dist > spread:
+            pull = 0.3
+            new_x = new_x - dist_x * pull
+            new_y = new_y - dist_y * pull
+
+        a["x"] = round(max(0.03, min(0.97, new_x)), 3)
+        a["y"] = round(max(0.03, min(0.97, new_y)), 3)
     return agents
 
 DRAMA_EVENTS = [

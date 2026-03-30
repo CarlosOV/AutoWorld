@@ -27,10 +27,11 @@ function render(d) {
   const newSeed = wname + (d.world_seed || '');
   if (window._worldName !== newSeed) {
     window._worldName = newSeed;
-    // Pre-compute CIV_CENTERS by running terrain gen at low res
-    generateTerrain(400, 225, newSeed);
-    // Reset agent positions in DB so they re-snap to land
-    if (!window._posReset) { window._posReset = true; fetch('/api/reset-positions', {method:'POST'}); }
+    terrainCache = null; terrainSeed = 0; // regenerate terrain
+  }
+  // Always sync CIV_CENTERS from API (authoritative, matches backend)
+  if (d.continent_centers && d.continent_centers.length) {
+    CIV_CENTERS = d.continent_centers;
   }
   document.getElementById('world-title').textContent = '🌍 ' + wname;
   document.title = '🌍 ' + wname;
@@ -153,8 +154,7 @@ function generateTerrain(W, H, worldName) {
     {cx:W*(.12+rng()*.08), cy:H*(.45+rng()*.08), r:Math.min(W,H)*(.03+rng()*.02), spikes:12},
     {cx:W*(.88+rng()*.05), cy:H*(.48+rng()*.08), r:Math.min(W,H)*(.025+rng()*.02),spikes:10},
   ];
-  // Sync CIV_CENTERS to actual continent positions
-  CIV_CENTERS = continents.map(c => ({x: c.cx/W, y: c.cy/H}));
+  // Note: CIV_CENTERS comes from /api/state (backend terrain.py) — same seed, same positions
 
   continents.forEach(c=>{
     // Shallow water halo
