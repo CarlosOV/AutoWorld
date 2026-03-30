@@ -5,7 +5,7 @@ import sys, os
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 import os
 from typing import Optional
-from world.memory import init_db, get_all_agents, get_recent_events, get_events, get_agent_history, get_world_state, get_event_count, ensure_world_seed
+from world.memory import init_db, get_all_agents, get_recent_events, get_events, get_agent_history, get_world_state, get_event_count, ensure_world_seed, save_agent
 from world.world_engine import answer_question
 from world.tech_tree import get_all_discoveries, get_civ_tech_summary, _tier_name, _get_civ_tier, _get_discovered
 import json
@@ -89,6 +89,15 @@ def lore():
 def tech_summary():
     civs = json.loads(get_world_state("civilizations", "[]"))
     return [get_civ_tech_summary(c["name"]) for c in civs]
+
+@app.post("/api/reset-positions")
+def reset_positions():
+    """Clear stored agent positions so they re-snap to correct CIV_CENTERS."""
+    agents = get_all_agents()
+    for a in agents:
+        a.pop("x", None); a.pop("y", None)
+        save_agent(a["name"], a)
+    return {"reset": len(agents)}
 
 @app.get("/", response_class=HTMLResponse)
 def dashboard():

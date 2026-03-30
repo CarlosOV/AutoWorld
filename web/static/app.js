@@ -24,7 +24,14 @@ async function fetchState() {
 
 function render(d) {
   const wname = d.world_name || 'AutoWorld';
-  window._worldName = wname + (d.world_seed || '');
+  const newSeed = wname + (d.world_seed || '');
+  if (window._worldName !== newSeed) {
+    window._worldName = newSeed;
+    // Pre-compute CIV_CENTERS by running terrain gen at low res
+    generateTerrain(400, 225, newSeed);
+    // Reset agent positions in DB so they re-snap to land
+    if (!window._posReset) { window._posReset = true; fetch('/api/reset-positions', {method:'POST'}); }
+  }
   document.getElementById('world-title').textContent = '🌍 ' + wname;
   document.title = '🌍 ' + wname;
   document.getElementById('era-badge').textContent = d.era || 'Primordial Age';
@@ -146,6 +153,8 @@ function generateTerrain(W, H, worldName) {
     {cx:W*(.12+rng()*.08), cy:H*(.45+rng()*.08), r:Math.min(W,H)*(.03+rng()*.02), spikes:12},
     {cx:W*(.88+rng()*.05), cy:H*(.48+rng()*.08), r:Math.min(W,H)*(.025+rng()*.02),spikes:10},
   ];
+  // Sync CIV_CENTERS to actual continent positions
+  CIV_CENTERS = continents.map(c => ({x: c.cx/W, y: c.cy/H}));
 
   continents.forEach(c=>{
     // Shallow water halo
@@ -237,9 +246,9 @@ function generateTerrain(W, H, worldName) {
 
 // ─── World Map ────────────────────────────────────────────
 // Compute civ centers so agents of same civ cluster together
-const CIV_CENTERS = [
+let CIV_CENTERS = [
   {x:.25,y:.35},{x:.72,y:.28},{x:.55,y:.65},{x:.20,y:.70},{x:.80,y:.65}
-];
+]; // overwritten by generateTerrain once seed is known
 
 function updateAgentPositions(agents) {
   const civs = worldData.civilizations || [];
