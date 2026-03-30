@@ -1,0 +1,9 @@
+version: "3.9"
+services:
+  autoworld:
+    build: .
+    restart: unless-stopped
+    volumes:
+      - ./world.db:/app/world.db
+      - ./.env:/app/.env
+    command: python main.py start

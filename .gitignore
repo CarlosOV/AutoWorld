@@ -1,0 +1,12 @@
+.env
+world.db
+__pycache__/
+*.pyc
+*.pyo
+.DS_Store
+*.mp3
+*.egg-info/
+dist/
+build/
+.venv/
+venv/

@@ -1,0 +1,317 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>🌍 AutoWorld</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: #0a0e1a; color: #e0e6f0; font-family: 'Segoe UI', sans-serif; }
+  header { background: linear-gradient(135deg, #1a1f35, #0d1220); padding: 16px 24px; border-bottom: 1px solid #2a3050; display: flex; align-items: center; gap: 16px; }
+  header h1 { font-size: 1.5rem; color: #7eb8f7; }
+  .era-badge { background: #1e2d50; border: 1px solid #3a5080; padding: 4px 12px; border-radius: 20px; font-size: 0.8rem; color: #7eb8f7; }
+  .grid { display: grid; grid-template-columns: 1fr 320px; gap: 0; height: calc(100vh - 60px); }
+  .main-panel { overflow-y: auto; padding: 20px; display: flex; flex-direction: column; gap: 20px; }
+  .side-panel { border-left: 1px solid #1e2540; overflow-y: auto; padding: 16px; display: flex; flex-direction: column; gap: 16px; }
+
+  /* World Map */
+  .world-map { background: #0d1628; border: 1px solid #1e2f50; border-radius: 12px; padding: 20px; }
+  .world-map h2 { color: #7eb8f7; margin-bottom: 12px; font-size: 1rem; }
+  canvas { width: 100%; border-radius: 8px; display: block; }
+
+  /* Civilizations */
+  .civs { display: flex; flex-wrap: wrap; gap: 12px; }
+  .civ-card { background: #111827; border: 1px solid #1e2f50; border-radius: 10px; padding: 14px; flex: 1; min-width: 180px; }
+  .civ-card h3 { font-size: 0.9rem; color: #90c4ff; margin-bottom: 6px; }
+  .civ-card .civ-stat { font-size: 0.75rem; color: #7a8ba0; margin-top: 3px; }
+  .civ-card .status { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 0.7rem; margin-top: 6px; }
+  .status.war { background: #3d1515; color: #ff6b6b; border: 1px solid #5a2020; }
+  .status.peace { background: #0d2d1a; color: #6bffb0; border: 1px solid #1a4a2a; }
+  .status.growing { background: #1a2d0d; color: #aaff6b; border: 1px solid #2a4a1a; }
+
+  /* Event Feed */
+  .event-feed { background: #0d1628; border: 1px solid #1e2f50; border-radius: 12px; overflow: hidden; }
+  .event-feed-header { padding: 12px 16px; background: #111827; border-bottom: 1px solid #1e2f50; font-size: 0.85rem; color: #7eb8f7; display: flex; justify-content: space-between; }
+  .event-list { max-height: 280px; overflow-y: auto; }
+  .event-item { padding: 10px 16px; border-bottom: 1px solid #131c30; display: flex; gap: 10px; }
+  .event-item:hover { background: #0f1a2e; }
+  .event-icon { font-size: 1.1rem; flex-shrink: 0; }
+  .event-text { font-size: 0.8rem; color: #c0cedf; line-height: 1.4; }
+  .event-time { font-size: 0.7rem; color: #4a5a70; margin-top: 3px; }
+  .event-item.epic { background: #1a1020; border-left: 3px solid #ff6b6b; }
+
+  /* Ask Oracle */
+  .oracle { background: #0d1628; border: 1px solid #2a3f6a; border-radius: 12px; padding: 16px; }
+  .oracle h2 { color: #7eb8f7; font-size: 0.9rem; margin-bottom: 10px; }
+  .oracle input { width: 100%; background: #111827; border: 1px solid #2a3a5a; color: #e0e6f0; padding: 8px 12px; border-radius: 8px; font-size: 0.85rem; outline: none; }
+  .oracle input:focus { border-color: #4a7abf; }
+  .oracle button { margin-top: 8px; background: #1e3d6e; border: 1px solid #2a5090; color: #7eb8f7; padding: 7px 16px; border-radius: 8px; cursor: pointer; font-size: 0.82rem; width: 100%; }
+  .oracle button:hover { background: #26508a; }
+  .oracle-response { margin-top: 10px; background: #070d1a; border: 1px solid #1e2f50; border-radius: 8px; padding: 10px; font-size: 0.8rem; color: #a0b8d0; line-height: 1.5; min-height: 60px; }
+
+  /* Agent Cards */
+  .agents-section h2 { color: #7eb8f7; font-size: 0.9rem; margin-bottom: 10px; }
+  .agent-card { background: #0d1628; border: 1px solid #1e2f50; border-radius: 10px; padding: 12px; margin-bottom: 8px; }
+  .agent-name { font-weight: bold; color: #90c4ff; font-size: 0.88rem; }
+  .agent-job { font-size: 0.75rem; color: #5a7a9a; margin-top: 2px; }
+  .agent-mood { font-size: 0.72rem; margin-top: 4px; }
+  .agent-civ { font-size: 0.7rem; color: #6a8aaa; margin-top: 3px; }
+  .mood-happy { color: #6bffb0; } .mood-sad { color: #6b9fff; }
+  .mood-angry { color: #ff6b6b; } .mood-neutral { color: #a0b0c0; }
+
+  /* Stats bar */
+  .stats { display: flex; gap: 16px; flex-wrap: wrap; }
+  .stat-box { background: #0d1628; border: 1px solid #1e2f50; border-radius: 10px; padding: 12px 18px; flex: 1; min-width: 120px; }
+  .stat-box .label { font-size: 0.72rem; color: #5a7a9a; }
+  .stat-box .value { font-size: 1.6rem; font-weight: bold; color: #7eb8f7; margin-top: 2px; }
+  /* Tech Tree */
+  .tech-section { background: #0d1628; border: 1px solid #1e2f50; border-radius: 12px; padding: 16px; }
+  .tech-section h2 { color: #c46bff; font-size: 1rem; margin-bottom: 14px; }
+  .tech-civ { margin-bottom: 16px; }
+  .tech-civ-name { font-size: 0.85rem; font-weight: bold; color: #e0c0ff; margin-bottom: 6px; display: flex; align-items: center; gap: 8px; }
+  .tech-tier-bar { height: 6px; background: #1a1030; border-radius: 3px; margin-bottom: 8px; overflow: hidden; }
+  .tech-tier-fill { height: 100%; border-radius: 3px; background: linear-gradient(90deg, #6b30ff, #c46bff, #ff6bb8); transition: width 1s; }
+  .tech-chips { display: flex; flex-wrap: wrap; gap: 5px; }
+  .tech-chip { background: #1a1035; border: 1px solid #3a1a60; color: #c090ff; font-size: 0.7rem; padding: 2px 8px; border-radius: 10px; }
+  .tech-chip.new { border-color: #c46bff; color: #e0a0ff; animation: glow 2s infinite; }
+  @keyframes glow { 0%,100%{box-shadow:0 0 4px #c46bff44} 50%{box-shadow:0 0 10px #c46bff99} }
+
+  ::-webkit-scrollbar { width: 5px; } ::-webkit-scrollbar-track { background: #0a0e1a; }
+  ::-webkit-scrollbar-thumb { background: #1e2f50; border-radius: 3px; }
+  .pulse { animation: pulse 2s infinite; }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.5} }
+</style>
+</head>
+<body>
+<header>
+  <span style="font-size:1.6rem">🌍</span>
+  <h1 id="world-title">AutoWorld</h1>
+  <span class="era-badge" id="era-badge">Loading...</span>
+  <span class="era-badge" id="year-badge" style="margin-left:auto">Year 1</span>
+  <span class="era-badge pulse" style="background:#1a2d10;border-color:#3a5020;color:#8afa60" id="live-badge">● LIVE</span>
+</header>
+
+<div class="grid">
+  <div class="main-panel">
+    <!-- Stats -->
+    <div class="stats" id="stats-row">
+      <div class="stat-box"><div class="label">Inhabitants</div><div class="value" id="stat-agents">-</div></div>
+      <div class="stat-box"><div class="label">Civilizations</div><div class="value" id="stat-civs">-</div></div>
+      <div class="stat-box"><div class="label">Events</div><div class="value" id="stat-events">-</div></div>
+      <div class="stat-box"><div class="label">Wars Active</div><div class="value" id="stat-wars" style="color:#ff8080">-</div></div>
+    </div>
+
+    <!-- World Map -->
+    <div class="world-map">
+      <h2>🗺️ World Map</h2>
+      <canvas id="worldCanvas" height="260"></canvas>
+    </div>
+
+    <!-- Civilizations -->
+    <div>
+      <h2 style="color:#7eb8f7;font-size:1rem;margin-bottom:12px">⚔️ Civilizations</h2>
+      <div class="civs" id="civs-container">
+        <div style="color:#5a7a9a;font-size:0.82rem">No civilizations yet — world is in tribal age...</div>
+      </div>
+    </div>
+
+    <!-- Tech Tree -->
+    <div class="tech-section">
+      <h2>🔬 Technology Tree</h2>
+      <div id="tech-container"><div style="color:#5a7a9a;font-size:0.82rem">No discoveries yet...</div></div>
+    </div>
+
+    <!-- Event Feed -->
+    <div class="event-feed">
+      <div class="event-feed-header">
+        <span>📜 Chronicle of Events</span>
+        <span id="event-count" style="color:#5a7a9a">0 events</span>
+      </div>
+      <div class="event-list" id="event-list"></div>
+    </div>
+  </div>
+
+  <div class="side-panel">
+    <!-- Oracle -->
+    <div class="oracle">
+      <h2>🔮 Ask the Oracle</h2>
+      <input type="text" id="oracle-input" placeholder="¿Qué pasó hoy?" onkeydown="if(event.key==='Enter')askOracle()">
+      <button onclick="askOracle()">Ask the World</button>
+      <div class="oracle-response" id="oracle-response">The oracle awaits your question...</div>
+    </div>
+
+    <!-- Agents -->
+    <div class="agents-section">
+      <h2>👥 Inhabitants</h2>
+      <div id="agents-list"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+const EVENT_ICONS = {
+  world_event: '🌐', agent_reaction: '💬', birth: '👶', death: '💀',
+  war: '⚔️', peace: '🕊️', discovery: '🔬', default: '📌'
+};
+const EPIC_WORDS = ['war','guerra','death','muerte','revolution','caída','catástrofe','battle'];
+
+let worldData = {};
+
+async function fetchState() {
+  try {
+    const res = await fetch('/api/state');
+    worldData = await res.json();
+    render(worldData);
+  } catch(e) { console.error(e); }
+}
+
+function render(d) {
+  document.getElementById('world-title').textContent = '🌍 AutoWorld';
+  document.getElementById('era-badge').textContent = d.era || 'Primordial Age';
+  document.getElementById('year-badge').textContent = d.year || 'Year 1';
+  document.getElementById('stat-agents').textContent = d.agents?.length || 0;
+  document.getElementById('stat-civs').textContent = d.civilizations?.length || 0;
+  document.getElementById('stat-events').textContent = d.events?.length || 0;
+
+  const wars = (d.civilizations || []).filter(c => c.status === 'war').length;
+  document.getElementById('stat-wars').textContent = wars;
+
+  renderCivs(d.civilizations || []);
+  renderTech(d.civilizations || [], d.discoveries || {});
+  renderEvents(d.events || []);
+  renderAgents(d.agents || []);
+  drawMap(d);
+}
+
+function renderTech(civs, discoveries) {
+  const el = document.getElementById('tech-container');
+  if (!civs.length) return;
+  const TIER_NAMES = ["Primitive","Ancient","Classical","Medieval","Renaissance","Industrial","Modern","Futuristic","Post-Human","Cosmic","Transcendent"];
+  el.innerHTML = civs.map(c => {
+    const techs = discoveries[c.name] || [];
+    const tier = c.tech_tier || 0;
+    const pct = Math.round((tier / 10) * 100);
+    const latest3 = techs.slice(-6);
+    return `<div class="tech-civ">
+      <div class="tech-civ-name">
+        ${c.emoji||'🏰'} ${c.name}
+        <span style="font-size:0.7rem;color:#8050c0;font-weight:normal">${TIER_NAMES[tier]} (Tier ${tier})</span>
+        <span style="margin-left:auto;font-size:0.7rem;color:#6a4a9a">${techs.length} discoveries</span>
+      </div>
+      <div class="tech-tier-bar"><div class="tech-tier-fill" style="width:${pct}%"></div></div>
+      <div class="tech-chips">
+        ${latest3.map((t,i) => `<span class="tech-chip ${i===latest3.length-1?'new':''}">${t}</span>`).join('')}
+        ${techs.length > 6 ? `<span class="tech-chip" style="color:#5a4a7a">+${techs.length-6} more</span>` : ''}
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function renderCivs(civs) {
+  const el = document.getElementById('civs-container');
+  if (!civs.length) { el.innerHTML = '<div style="color:#5a7a9a;font-size:0.82rem">Tribal age — no civilizations formed yet...</div>'; return; }
+  el.innerHTML = civs.map(c => `
+    <div class="civ-card">
+      <h3>${c.emoji || '🏰'} ${c.name}</h3>
+      <div class="civ-stat">👥 Pop: ${c.population || '?'}</div>
+      <div class="civ-stat">🏛️ Capital: ${c.capital || '?'}</div>
+      <div class="civ-stat">⚡ Power: ${c.power || 0}</div>
+      <span class="status ${c.status || 'peace'}">${c.status || 'peace'}</span>
+    </div>
+  `).join('');
+}
+
+function renderEvents(events) {
+  const el = document.getElementById('event-list');
+  document.getElementById('event-count').textContent = events.length + ' events';
+  el.innerHTML = events.map(e => {
+    const icon = EVENT_ICONS[e.type] || EVENT_ICONS.default;
+    const isEpic = EPIC_WORDS.some(w => e.desc?.toLowerCase().includes(w));
+    const ts = (e.ts || '').replace('T',' ').slice(0,16);
+    return `<div class="event-item ${isEpic?'epic':''}">
+      <span class="event-icon">${icon}</span>
+      <div><div class="event-text">${e.desc || ''}</div><div class="event-time">${ts}</div></div>
+    </div>`;
+  }).join('');
+}
+
+function renderAgents(agents) {
+  const el = document.getElementById('agents-list');
+  const moodClass = m => (['happy','feliz','excited'].some(w=>m?.includes(w))?'mood-happy':['sad','triste'].some(w=>m?.includes(w))?'mood-sad':['angry','furioso','enojado'].some(w=>m?.includes(w))?'mood-angry':'mood-neutral');
+  el.innerHTML = agents.map(a => `
+    <div class="agent-card">
+      <div class="agent-name">👤 ${a.name || '?'}</div>
+      <div class="agent-job">${a.occupation || '?'} · Age ${a.age || '?'}</div>
+      <div class="agent-mood ${moodClass(a.mood)}">Mood: ${a.mood || 'neutral'}</div>
+      ${a.civ ? `<div class="agent-civ">🏰 ${a.civ}</div>` : ''}
+    </div>
+  `).join('');
+}
+
+function drawMap(d) {
+  const canvas = document.getElementById('worldCanvas');
+  canvas.width = canvas.offsetWidth * window.devicePixelRatio;
+  canvas.height = 260 * window.devicePixelRatio;
+  const ctx = canvas.getContext('2d');
+  ctx.scale(window.devicePixelRatio, window.devicePixelRatio);
+  const W = canvas.offsetWidth, H = 260;
+
+  // Background
+  const bg = ctx.createRadialGradient(W/2,H/2,10,W/2,H/2,W/2);
+  bg.addColorStop(0,'#0d1e35'); bg.addColorStop(1,'#070d18');
+  ctx.fillStyle = bg; ctx.fillRect(0,0,W,H);
+
+  // Grid
+  ctx.strokeStyle = '#0d1a2e'; ctx.lineWidth = 0.5;
+  for(let x=0;x<W;x+=40){ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,H);ctx.stroke();}
+  for(let y=0;y<H;y+=40){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(W,y);ctx.stroke();}
+
+  // Agents as dots
+  const agents = d.agents || [];
+  const civColors = ['#4a9fff','#ff6b6b','#6bffb0','#ffb86b','#c46bff','#6bfff0'];
+  agents.forEach((a, i) => {
+    const seed = hashCode(a.name || i);
+    const x = 30 + ((seed * 7919) % (W - 60));
+    const y = 20 + ((seed * 6271) % (H - 40));
+    const col = civColors[i % civColors.length];
+
+    // Glow
+    const grd = ctx.createRadialGradient(x,y,0,x,y,14);
+    grd.addColorStop(0, col+'55'); grd.addColorStop(1,'transparent');
+    ctx.fillStyle = grd; ctx.beginPath(); ctx.arc(x,y,14,0,Math.PI*2); ctx.fill();
+
+    // Dot
+    ctx.fillStyle = col; ctx.beginPath(); ctx.arc(x,y,5,0,Math.PI*2); ctx.fill();
+
+    // Name
+    ctx.fillStyle = '#c0d8f0'; ctx.font = '10px Segoe UI';
+    ctx.fillText((a.name||'?').split(' ')[0], x+8, y+4);
+  });
+
+  // Draw connections between agents in same civ
+  // (simplified: connect first 2 of each civ)
+}
+
+function hashCode(s) {
+  let h = 0; for(let i=0;i<s.length;i++) h = Math.imul(31,h)+s.charCodeAt(i)|0;
+  return Math.abs(h);
+}
+
+async function askOracle() {
+  const q = document.getElementById('oracle-input').value.trim();
+  if (!q) return;
+  const el = document.getElementById('oracle-response');
+  el.textContent = '✨ The oracle is consulting the ancient tomes...';
+  try {
+    const res = await fetch('/api/ask?q=' + encodeURIComponent(q));
+    const d = await res.json();
+    el.textContent = d.answer;
+  } catch(e) { el.textContent = 'The oracle is silent...'; }
+}
+
+// Auto-refresh every 60s
+fetchState();
+setInterval(fetchState, 60000);
+</script>
+</body>
+</html>
