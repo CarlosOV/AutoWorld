@@ -21,20 +21,22 @@ def get_continent_centers(world_seed: str) -> list[dict]:
     if cached:
         return json.loads(cached)
 
-    S = abs(_hash_seed(world_seed)) % 9999 + 1
+    S = float(abs(_hash_seed(world_seed)) % 9999 + 1)
 
-    # Simple deterministic positions — JS uses these directly to draw blobs
-    def r(i: int, lo: float, hi: float) -> float:
+    # No inner function — compute each coordinate inline to avoid closure issues
+    def _r(i, lo, hi):
         return round(lo + _srand(S * 3.7 + i * 1.13) * (hi - lo), 4)
 
+    v = [_r(i, 0.0, 1.0) for i in range(28)]  # precompute all values
+
     centers = [
-        {"x": r(0, .15, .45), "y": r(1, .15, .45)},
-        {"x": r(2, .50, .80), "y": r(3, .25, .55)},
-        {"x": r(4, .25, .55), "y": r(5, .55, .82)},
-        {"x": r(6, .60, .85), "y": r(7, .55, .82)},
-        {"x": r(8, .70, .92), "y": r(9, .10, .40)},
-        {"x": r(10,.05, .25), "y": r(11,.35, .65)},
-        {"x": r(12,.82, .96), "y": r(13,.38, .62)},
+        {"x": 0.15 + v[0]  * 0.30, "y": 0.15 + v[1]  * 0.30},
+        {"x": 0.50 + v[2]  * 0.30, "y": 0.25 + v[3]  * 0.30},
+        {"x": 0.25 + v[4]  * 0.30, "y": 0.55 + v[5]  * 0.27},
+        {"x": 0.60 + v[6]  * 0.25, "y": 0.55 + v[7]  * 0.27},
+        {"x": 0.70 + v[8]  * 0.22, "y": 0.10 + v[9]  * 0.30},
+        {"x": 0.05 + v[10] * 0.20, "y": 0.35 + v[11] * 0.30},
+        {"x": 0.82 + v[12] * 0.14, "y": 0.38 + v[13] * 0.24},
     ]
     centers = [{"x": round(c["x"], 4), "y": round(c["y"], 4)} for c in centers]
     set_world_state("continent_centers", json.dumps(centers))
