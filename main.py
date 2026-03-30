@@ -27,14 +27,13 @@ TICK_INTERVAL = int(os.getenv("TICK_INTERVAL", "30"))
 
 def cmd_reset():
     """Wipe all world data and start fresh."""
-    from world.memory import get_db_conn, init_db
-    import os
+    from world.memory import _get_conn, init_db
     confirm = input("⚠️  This will ERASE all world data. Type YES to confirm: ").strip()
     if confirm != "YES":
         print("Aborted.")
         return
     init_db()
-    conn = get_db_conn()
+    conn = _get_conn()
     cur = conn.cursor()
     for table in ("agents", "events", "world_state"):
         cur.execute(f"DELETE FROM {table}")
