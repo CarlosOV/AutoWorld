@@ -4,16 +4,20 @@ import requests
 OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY", "")
 DEFAULT_MODEL = os.getenv("LLM_MODEL", "minimax/minimax-m2.5:free")
 MAX_TOKENS = int(os.getenv("LLM_MAX_TOKENS", "0"))  # 0 = no limit (let model decide)
+WORLD_LANGUAGE = os.getenv("WORLD_LANGUAGE", "Spanish")  # language for all LLM outputs
 
-def ask_llm(prompt: str, system: str = "", max_tokens: int = 500) -> str:
+def ask_llm(prompt: str, system: str = "", max_tokens: int = 500, language: str = None) -> str:
+    """Call the LLM. Language is injected automatically from WORLD_LANGUAGE env var."""
     headers = {
         "Authorization": f"Bearer {OPENROUTER_API_KEY}",
         "Content-Type": "application/json",
         "HTTP-Referer": "https://github.com/autoworld",
     }
+    lang = language or WORLD_LANGUAGE
+    lang_instruction = f"Always respond in {lang}. All names, descriptions, and narratives must be in {lang}."
+
     messages = []
-    if system:
-        messages.append({"role": "system", "content": system})
+    messages.append({"role": "system", "content": (system + "\n\n" + lang_instruction).strip() if system else lang_instruction})
     messages.append({"role": "user", "content": prompt})
 
     # If LLM_MAX_TOKENS is set, use it; otherwise don't send the param (model decides)

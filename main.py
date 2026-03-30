@@ -110,12 +110,16 @@ def cmd_add_agent():
 
 def _ensure_agents():
     agents = get_all_agents()
-    if len(agents) < NUM_AGENTS:
-        print(f"Generating {NUM_AGENTS - len(agents)} agents...")
-        for _ in range(NUM_AGENTS - len(agents)):
-            existing = [a["name"] for a in get_all_agents()]
-            a = generate_agent(WORLD_NAME, existing)
-            print(f"  ✨ {a['name']} ({a.get('occupation','?')})")
+    if agents:
+        print(f"✅ World loaded: {len(agents)} existing inhabitants, resuming...")
+        return  # never overwrite existing world data
+
+    # Only generate if truly empty (first run)
+    print(f"🌱 First run — generating {NUM_AGENTS} initial inhabitants...")
+    for _ in range(NUM_AGENTS):
+        existing = [a["name"] for a in get_all_agents()]
+        a = generate_agent(WORLD_NAME, existing)
+        print(f"  ✨ {a['name']} ({a.get('occupation','?')})")
 
 
 if __name__ == "__main__":
