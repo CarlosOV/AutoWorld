@@ -24,7 +24,7 @@ async function fetchState() {
 
 function render(d) {
   const wname = d.world_name || 'AutoWorld';
-  window._worldName = wname;
+  window._worldName = wname + (d.world_seed || '');
   document.getElementById('world-title').textContent = '🌍 ' + wname;
   document.title = '🌍 ' + wname;
   document.getElementById('era-badge').textContent = d.era || 'Primordial Age';

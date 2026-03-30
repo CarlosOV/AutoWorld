@@ -25,6 +25,15 @@ def _ph():
     return "%s" if DATABASE_URL else "?"
 
 # --- Schema ---
+def ensure_world_seed():
+    """Generate a unique seed for this world instance if not set."""
+    import random
+    seed = get_world_state("world_seed", "")
+    if not seed:
+        seed = str(random.randint(100000, 999999))
+        set_world_state("world_seed", seed)
+    return seed
+
 def init_db():
     conn = _get_conn()
     c = _cur(conn)

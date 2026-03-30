@@ -5,7 +5,7 @@ import sys, os
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 import os
 from typing import Optional
-from world.memory import init_db, get_all_agents, get_recent_events, get_events, get_agent_history, get_world_state, get_event_count
+from world.memory import init_db, get_all_agents, get_recent_events, get_events, get_agent_history, get_world_state, get_event_count, ensure_world_seed
 from world.world_engine import answer_question
 from world.tech_tree import get_all_discoveries, get_civ_tech_summary, _tier_name, _get_civ_tier, _get_discovered
 import json
@@ -42,6 +42,7 @@ def get_state():
 
     return {
         "world_name": os.getenv("WORLD_NAME", "AutoWorld"),
+        "world_seed": ensure_world_seed(),
         "era": era,
         "year": year,
         "agents": agents,
