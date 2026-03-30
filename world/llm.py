@@ -2,7 +2,7 @@ import os
 import requests
 
 OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY", "")
-DEFAULT_MODEL = os.getenv("LLM_MODEL", "mistralai/mistral-7b-instruct:free")
+DEFAULT_MODEL = os.getenv("LLM_MODEL", "meta-llama/llama-3.2-3b-instruct:free")
 
 def ask_llm(prompt: str, system: str = "", max_tokens: int = 500) -> str:
     headers = {
