@@ -32,11 +32,12 @@ def cmd_reset():
     if not force:
         try:
             confirm = input("⚠️  This will ERASE all world data. Type YES to confirm: ").strip()
+            if confirm != "YES":
+                print("Aborted.")
+                return
         except EOFError:
-            confirm = ""
-        if confirm != "YES":
-            print("Aborted. Use 'python main.py reset --yes' to skip confirmation.")
-            return
+            # No TTY (container) — proceed automatically
+            print("No TTY detected — proceeding with reset.")
     init_db()
     conn = _get_conn()
     cur = conn.cursor()
