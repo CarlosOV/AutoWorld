@@ -16,7 +16,7 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-from world.memory import init_db, get_all_agents, get_recent_events
+from world.memory import init_db, get_all_agents, get_recent_events, get_world_state
 from world.agent import generate_agent
 from world.world_engine import world_tick, answer_question
 
