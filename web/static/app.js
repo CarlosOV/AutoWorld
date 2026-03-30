@@ -280,6 +280,11 @@ function drawMap() {
   canvas.width = W; canvas.height = H;
   const ctx = canvas.getContext('2d');
 
+  // Apply zoom/pan transform
+  ctx.save();
+  ctx.translate(mapPanX * W, mapPanY * H);
+  ctx.scale(mapZoom, mapZoom);
+
   // Draw terrain (seeded from world name stored in page title)
   const terrain = generateTerrain(W, H, window._worldName || 'Inkari');
   ctx.drawImage(terrain, 0, 0, W, H);
@@ -360,6 +365,9 @@ function drawMap() {
     // Mood dot
     ctx.fillStyle=moodColor; ctx.beginPath(); ctx.arc(px+9,py-9,3,0,Math.PI*2); ctx.fill();
   });
+}
+
+  ctx.restore();
 }
 
 // Animate map
@@ -458,13 +466,19 @@ function renderAgents(agents) {
 }
 
 function pingAgent(name) {
-  // Flash the agent on the map
   const pos = agentPositions[name];
   if (!pos) return;
+  // Zoom to agent location
+  const canvas = document.getElementById('worldCanvas');
+  const W = canvas.parentElement.clientWidth, H = canvas.parentElement.clientHeight;
+  mapZoom = 3;
+  mapPanX = 0.5/mapZoom - pos.tx;
+  mapPanY = 0.5/mapZoom - pos.ty;
+  clampPan();
+  // Flash
   const orig = pos.color;
   pos.color = '#ffffff';
-  setTimeout(()=>{ pos.color=orig; }, 500);
-  // Switch to agents tab
+  setTimeout(()=>{ pos.color=orig; }, 600);
   switchTab('agents');
 }
 
@@ -521,6 +535,88 @@ async function askOracle(deep) {
 
 // ─── Helpers ──────────────────────────────────────────────
 function hashCode(s){let h=0;for(let i=0;i<s.length;i++)h=Math.imul(31,h)+s.charCodeAt(i)|0;return Math.abs(h)}
+
+// ─── Zoom & Pan ───────────────────────────────────────────
+let mapZoom = 1, mapPanX = 0, mapPanY = 0;
+let isPanning = false, panStartX = 0, panStartY = 0;
+
+const canvas = document.getElementById('worldCanvas');
+
+canvas.addEventListener('wheel', e => {
+  e.preventDefault();
+  const rect = canvas.getBoundingClientRect();
+  const mx = (e.clientX - rect.left) / rect.width;
+  const my = (e.clientY - rect.top) / rect.height;
+  const delta = e.deltaY < 0 ? 1.15 : 0.87;
+  const newZoom = Math.max(1, Math.min(6, mapZoom * delta));
+  // Zoom toward mouse position
+  mapPanX = mx - (mx - mapPanX) * (newZoom / mapZoom);
+  mapPanY = my - (my - mapPanY) * (newZoom / mapZoom);
+  mapZoom = newZoom;
+  clampPan();
+}, {passive: false});
+
+canvas.addEventListener('mousedown', e => {
+  if (e.button !== 0) return;
+  isPanning = true;
+  panStartX = e.clientX;
+  panStartY = e.clientY;
+  canvas.style.cursor = 'grabbing';
+});
+canvas.addEventListener('mousemove', e => {
+  if (!isPanning) return;
+  const rect = canvas.getBoundingClientRect();
+  mapPanX += (e.clientX - panStartX) / rect.width / mapZoom;
+  mapPanY += (e.clientY - panStartY) / rect.height / mapZoom;
+  panStartX = e.clientX; panStartY = e.clientY;
+  clampPan();
+});
+canvas.addEventListener('mouseup',   () => { isPanning = false; canvas.style.cursor = 'grab'; });
+canvas.addEventListener('mouseleave',() => { isPanning = false; canvas.style.cursor = 'grab'; });
+canvas.style.cursor = 'grab';
+
+// Touch support
+let lastTouchDist = 0;
+canvas.addEventListener('touchstart', e => {
+  if (e.touches.length === 2) {
+    lastTouchDist = Math.hypot(e.touches[0].clientX - e.touches[1].clientX, e.touches[0].clientY - e.touches[1].clientY);
+  } else if (e.touches.length === 1) {
+    isPanning = true; panStartX = e.touches[0].clientX; panStartY = e.touches[0].clientY;
+  }
+}, {passive:true});
+canvas.addEventListener('touchmove', e => {
+  if (e.touches.length === 2) {
+    const dist = Math.hypot(e.touches[0].clientX - e.touches[1].clientX, e.touches[0].clientY - e.touches[1].clientY);
+    const scale = dist / lastTouchDist;
+    mapZoom = Math.max(1, Math.min(6, mapZoom * scale));
+    lastTouchDist = dist; clampPan();
+  } else if (isPanning && e.touches.length === 1) {
+    const rect = canvas.getBoundingClientRect();
+    mapPanX += (e.touches[0].clientX - panStartX) / rect.width / mapZoom;
+    mapPanY += (e.touches[0].clientY - panStartY) / rect.height / mapZoom;
+    panStartX = e.touches[0].clientX; panStartY = e.touches[0].clientY; clampPan();
+  }
+}, {passive:true});
+canvas.addEventListener('touchend', () => { isPanning = false; }, {passive:true});
+
+function clampPan() {
+  const maxPan = (mapZoom - 1) / mapZoom;
+  mapPanX = Math.max(-maxPan, Math.min(0, mapPanX));
+  mapPanY = Math.max(-maxPan, Math.min(0, mapPanY));
+}
+
+// Add zoom buttons to overlay
+const zoomBtns = document.createElement('div');
+zoomBtns.style.cssText = 'position:absolute;top:50px;right:12px;display:flex;flex-direction:column;gap:4px;pointer-events:all;z-index:10';
+zoomBtns.innerHTML = `
+  <button onclick="zoomBy(1.3)" style="background:#0a1020cc;border:1px solid #2a3a5a;color:#c9a84c;width:28px;height:28px;border-radius:3px;cursor:pointer;font-size:1rem;line-height:1">+</button>
+  <button onclick="zoomBy(0.77)" style="background:#0a1020cc;border:1px solid #2a3a5a;color:#c9a84c;width:28px;height:28px;border-radius:3px;cursor:pointer;font-size:1rem;line-height:1">−</button>
+  <button onclick="resetZoom()" style="background:#0a1020cc;border:1px solid #2a3a5a;color:#607080;width:28px;height:28px;border-radius:3px;cursor:pointer;font-size:.6rem;line-height:1">⊡</button>
+`;
+document.querySelector('.map-overlay').appendChild(zoomBtns);
+
+function zoomBy(f){ mapZoom=Math.max(1,Math.min(6,mapZoom*f)); clampPan(); }
+function resetZoom(){ mapZoom=1; mapPanX=0; mapPanY=0; }
 
 // ─── Init ─────────────────────────────────────────────────
 fetchState().then(() => {
