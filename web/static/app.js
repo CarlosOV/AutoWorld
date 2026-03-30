@@ -364,11 +364,12 @@ function drawMap() {
       ctx.font = `bold ${10/mapZoom*3}px Cinzel,serif`;
       ctx.textAlign = 'center';
       ctx.fillText(name, px, py - 21);
-      // Mood bar
+      // Mood bar — deterministic fill based on agent name hash
+      const moodFill = ((a.name.charCodeAt(0)||5) * 37 + (a.name.charCodeAt(1)||3) * 13) % 60 / 100 + 0.4;
       ctx.fillStyle = '#1a2030';
       ctx.fillRect(px - 14, py + 16, 28, 4);
       ctx.fillStyle = moodColor;
-      ctx.fillRect(px - 14, py + 16, 28 * (0.5 + Math.random()*0.5), 4);
+      ctx.fillRect(px - 14, py + 16, 28 * moodFill, 4);
     });
   }
 

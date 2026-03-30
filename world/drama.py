@@ -40,73 +40,115 @@ def move_agents(agents: list) -> list:
         a["y"] = round(max(0.03, min(0.97, a.get("y", 0.5) + dy)), 3)
     return agents
 
+DRAMA_EVENTS = [
+    # Traición y poder
+    ("betrayal",    "💔", "{a} betrayed {b}'s trust — revealing a secret that could destroy them"),
+    ("powerplay",   "👑", "{a} made a bold move to seize {b}'s position of influence"),
+    ("conspiracy",  "🕵️", "{a} and {b} were caught conspiring against a common enemy"),
+    # Romance y envidia
+    ("romance",     "❤️",  "{a} and {b} share a forbidden attraction neither will admit"),
+    ("jealousy",    "😡", "{b} is consumed by jealousy over {a}'s sudden rise to fame"),
+    ("rivalry",     "⚔️", "The rivalry between {a} and {b} has reached a boiling point"),
+    # Secretos y misterio
+    ("secret",      "🤫", "{a} is hiding something from everyone — even {b} who suspects the truth"),
+    ("blackmail",   "📜", "Someone is blackmailing {a} using {b}'s name as leverage"),
+    ("revelation",  "😱", "A shocking truth about {a}'s past was uncovered, implicating {b}"),
+    # Humor y vida cotidiana
+    ("scandal",     "🗞️",  "A public scandal erupts: {a} was caught doing something {b} swore they'd never do"),
+    ("debt",        "💰", "{a} owes {b} a debt they can't repay — and the deadline is approaching"),
+    ("duel",        "🗡️",  "{a} challenged {b} to a public duel after an unforgivable insult"),
+]
+
 def maybe_gossip(agents: list, world_year: int) -> bool:
-    """Generate a juicy gossip/rumor between two agents. Returns True if generated."""
-    if len(agents) < 2 or random.random() > 0.35:
+    """Generate a juicy dramatic event between two agents."""
+    if len(agents) < 2 or random.random() > 0.40:
         return False
 
     a, b = random.sample(agents, 2)
-    gossip_types = [
-        f"{a['name']} was seen sneaking into {b['name']}'s home at midnight",
-        f"Rumor has it {a['name']} and {b['name']} had a fierce argument",
-        f"Whispers say {a['name']} is secretly in love with {b['name']}",
-        f"{a['name']} allegedly stole something precious from {b['name']}",
-        f"People say {b['name']} is jealous of {a['name']}'s recent success",
-        f"{a['name']} and {b['name']} were caught making a secret pact",
-    ]
-    seed_gossip = random.choice(gossip_types)
+    etype, emoji, seed_template = random.choice(DRAMA_EVENTS)
+    seed_gossip = seed_template.format(a=a['name'], b=b['name'])
 
-    prompt = f"""
-In the world of {WORLD_NAME}, Year {world_year}:
-{a['name']} is a {a.get('occupation','?')} with personality: {', '.join(a.get('personality',[]))}
-{b['name']} is a {b.get('occupation','?')} with personality: {', '.join(b.get('personality',[]))}
+    existing_rel = a.get("relationships", {}).get(b["name"], "strangers")
 
-Rumor seed: "{seed_gossip}"
+    prompt = f"""World: {WORLD_NAME}, Year {world_year}.
+{a['name']}: {a.get('occupation','?')}, personality: {', '.join(a.get('personality',[])[:3])}
+{b['name']}: {b.get('occupation','?')}, personality: {', '.join(b.get('personality',[])[:3])}
+Their relationship: {existing_rel}
 
-Write a juicy 2-sentence gossip/rumor about these two that spreads through the town.
-Make it dramatic, specific, and entertaining. No JSON.
-"""
-    gossip = ask_llm(prompt, max_tokens=120)
-    log_event("gossip", f"🗣️ {gossip}", [a["name"], b["name"]])
+Dramatic event: "{seed_gossip}"
 
-    # Update relationship
-    rel_type = random.choice(["suspicious_of", "rival", "admires", "friend", "lover"])
-    _update_relationship(a, b["name"], rel_type)
-    _update_relationship(b, a["name"], rel_type)
+Write 2-3 gripping sentences about this event as if a town crier is announcing it.
+Be SPECIFIC — use names, places, objects. Make it feel real and consequential.
+End with a hint of what might happen next. No JSON, no meta-commentary."""
+
+    gossip = ask_llm(prompt, max_tokens=150)
+    if not gossip:
+        return False
+    log_event("gossip", f"{emoji} {gossip}", [a["name"], b["name"]])
+
+    # Relationship consequences
+    rel_map = {
+        "betrayal": ("enemy", "distrusts"), "powerplay": ("rival", "rivals"),
+        "conspiracy": ("ally", "ally"), "romance": ("lover", "lover"),
+        "jealousy": ("enemy", "jealous_of"), "rivalry": ("rival", "rival"),
+        "secret": ("suspicious_of", "suspicious_of"), "blackmail": ("enemy", "fears"),
+        "revelation": ("distrusts", "distrusts"), "scandal": ("rival", "rival"),
+        "debt": ("owes", "owed_by"), "duel": ("enemy", "enemy"),
+    }
+    rel_a, rel_b = rel_map.get(etype, ("rival", "rival"))
+    _update_relationship(a, b["name"], rel_a)
+    _update_relationship(b, a["name"], rel_b)
     save_agent(a["name"], a)
     save_agent(b["name"], b)
+
+    # Notify Telegram for spicy events
+    if etype in ("betrayal", "duel", "revelation", "blackmail"):
+        notify(f"🎭 *Drama en {WORLD_NAME}*\n{gossip}")
     return True
 
+PERSONAL_ARCS = [
+    ("quest",      "🗺️",  "{name} has secretly embarked on a quest no one else knows about"),
+    ("obsession",  "🔮", "{name} has become dangerously obsessed with something forbidden"),
+    ("loss",       "💀", "{name} is grieving a loss they refuse to show in public"),
+    ("ambition",   "🏹", "{name}'s ambition is growing — they want something they shouldn't"),
+    ("discovery",  "✨", "{name} discovered something ancient that changes everything they believed"),
+    ("addiction",  "🌙", "{name} has developed a secret habit that's slowly consuming them"),
+    ("vision",     "👁️",  "{name} has been having visions — or are they warnings?"),
+    ("revenge",    "🔥", "{name} is quietly planning revenge against someone who wronged them"),
+]
+
 def maybe_secondary_story(agents: list, world_year: int) -> bool:
-    """Generate a personal subplot for one agent. Returns True if generated."""
-    if not agents or random.random() > 0.25:
+    """Generate a personal subplot for one agent."""
+    if not agents or random.random() > 0.30:
         return False
 
     agent = random.choice(agents)
-    story_seeds = [
-        f"{agent['name']} discovered a hidden secret about their past",
-        f"{agent['name']} is on a personal quest no one knows about",
-        f"{agent['name']} received a mysterious letter",
-        f"{agent['name']} is struggling with an internal conflict",
-        f"{agent['name']} found something ancient and valuable",
-        f"{agent['name']} has been having strange dreams",
-    ]
-    seed = random.choice(story_seeds)
-    goals = ', '.join(agent.get('goals', []))
+    etype, emoji, seed_template = random.choice(PERSONAL_ARCS)
+    seed = seed_template.format(name=agent['name'])
+    goals = ', '.join(agent.get('goals', [])[:2])
+    memories_hint = agent.get('memories', ['nothing notable'])[-1] if agent.get('memories') else 'nothing notable'
 
-    prompt = f"""
-Personal subplot for {agent['name']} in {WORLD_NAME}, Year {world_year}.
-Occupation: {agent.get('occupation','?')} | Goals: {goals}
-Story seed: "{seed}"
+    prompt = f"""World: {WORLD_NAME}, Year {world_year}.
+Character: {agent['name']}, {agent.get('occupation','?')}
+Personality: {', '.join(agent.get('personality',[])[:3])}
+Goals: {goals}
+Recent memory: {memories_hint}
 
-Write 2 sentences expanding this personal story. Be specific and intriguing. No JSON.
-"""
-    story = ask_llm(prompt, max_tokens=120)
-    log_event("personal_story", f"📖 [{agent['name']}] {story}", [agent["name"]])
+Personal arc: "{seed}"
 
-    # Add to agent memories
-    agent["memories"] = agent.get("memories", []) + [f"Year {world_year} personal: {story[:80]}"]
+Write 2-3 vivid sentences about this character's inner struggle or secret journey.
+Be SPECIFIC and emotionally resonant. Hint at consequences. No JSON."""
+
+    story = ask_llm(prompt, max_tokens=150)
+    if not story:
+        return False
+    log_event("personal_story", f"{emoji} [{agent['name']}] {story}", [agent["name"]])
+
+    agent["memories"] = agent.get("memories", []) + [f"Año {world_year}: {story[:100]}"]
     save_agent(agent["name"], agent)
+
+    if etype in ("obsession", "revenge", "vision"):
+        notify(f"📖 *Historia personal — {agent['name']}*\n{story}")
     return True
 
 def _update_relationship(agent: dict, other_name: str, rel_type: str):
