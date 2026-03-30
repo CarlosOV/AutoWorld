@@ -324,8 +324,8 @@ function generateTerrain(W, H, worldName) {
 
   function lC(a,b,t){return[a[0]+(b[0]-a[0])*t, a[1]+(b[1]-a[1])*t, a[2]+(b[2]-a[2])*t]}
 
-  // Biomes
-  const B={dSea:[5,15,35],sea:[8,28,58],shallow:[12,52,85],sand:[185,165,105],grass:[72,105,48],forest:[35,68,28],hill:[95,82,55],rock:[105,95,82],snow:[215,218,228]};
+  // Biomes — mapa de fantasía tipo parchment
+  const B={dSea:[8,22,50],sea:[14,42,82],shallow:[22,68,105],sand:[195,175,115],grass:[88,125,58],forest:[58,100,42],hill:[115,100,68],rock:[128,115,98],snow:[225,225,232]};
 
   // Multiple island blobs — not a single oval
   // Defined as {cx,cy,rx,ry,str} normalized 0..1
@@ -357,17 +357,17 @@ function generateTerrain(W, H, worldName) {
       h=Math.max(0,Math.min(1,h));
 
       let col;
-      if(h<.18) col=lC(B.dSea,B.sea,h/.18);
-      else if(h<.32) col=lC(B.sea,B.shallow,(h-.18)/.14);
-      else if(h<.38) col=lC(B.shallow,B.sand,(h-.32)/.06);
-      else if(h<.44) col=lC(B.sand,B.grass,(h-.38)/.06);
-      else if(h<.58) col=lC(B.grass,B.forest,(h-.44)/.14);
-      else if(h<.70) col=lC(B.forest,B.hill,(h-.58)/.12);
-      else if(h<.82) col=lC(B.hill,B.rock,(h-.70)/.12);
-      else           col=lC(B.rock,B.snow,(h-.82)/.18);
+      if(h<.22) col=lC(B.dSea,B.sea,h/.22);
+      else if(h<.36) col=lC(B.sea,B.shallow,(h-.22)/.14);
+      else if(h<.42) col=lC(B.shallow,B.sand,(h-.36)/.06);
+      else if(h<.48) col=lC(B.sand,B.grass,(h-.42)/.06);
+      else if(h<.64) col=lC(B.grass,B.forest,(h-.48)/.16);
+      else if(h<.76) col=lC(B.forest,B.hill,(h-.64)/.12);
+      else if(h<.88) col=lC(B.hill,B.rock,(h-.76)/.12);
+      else           col=lC(B.rock,B.snow,(h-.88)/.12);
 
-      // Micro shading
-      const shade=.84+fbm(nx*12,ny*12,S+33)*.28;
+      // Micro shading — suave para no crear halos
+      const shade=.90+fbm(nx*8,ny*8,S+33)*.18;
       const i=(py*W+px)*4;
       d[i]=col[0]*shade; d[i+1]=col[1]*shade; d[i+2]=col[2]*shade; d[i+3]=255;
     }
