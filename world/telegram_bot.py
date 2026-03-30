@@ -37,6 +37,9 @@ def _handle(message: dict):
     text    = message.get("text", "").strip()
     if not text:
         return
+    # Strip bot mention from commands (e.g. /status@mybot → /status)
+    if text.startswith("/") and "@" in text.split()[0]:
+        text = text.split("@")[0] + (" " + " ".join(text.split()[1:]) if len(text.split()) > 1 else "")
 
     # Security: only respond to the configured chat
     if TELEGRAM_CHAT_ID and chat_id != TELEGRAM_CHAT_ID:
@@ -136,12 +139,25 @@ def _handle(message: dict):
         _send(chat_id, f"🔮 *{WORLD_NAME}*\n\n{answer}")
 
 
+def _drain_pending() -> int:
+    """On startup, skip all pending messages to avoid replaying old ones."""
+    try:
+        resp = requests.get(f"{API}/getUpdates", params={"offset": -1, "timeout": 0}, timeout=10)
+        updates = resp.json().get("result", [])
+        if updates:
+            return updates[-1]["update_id"] + 1
+    except Exception:
+        pass
+    return 0
+
 def _poll_loop():
     if not TELEGRAM_TOKEN:
         print("[bot] No TELEGRAM_TOKEN — bot disabled.")
         return
     print(f"[bot] Telegram bot started, listening for messages...")
-    offset = 0
+    # Skip messages that arrived before this run
+    offset = _drain_pending()
+    print(f"[bot] Skipped old messages, starting from offset {offset}")
     while True:
         try:
             resp = requests.get(f"{API}/getUpdates", params={"offset": offset, "timeout": 30}, timeout=35)
