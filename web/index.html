@@ -305,16 +305,36 @@ function fbm(x,y,s,oct=4){
 }
 
 function blobPath(ctx, cx, cy, r, spikes, rng){
-  // Irregular polygon with noise — creates natural-looking landmass outline
-  const pts=spikes||18;
+  // Highly irregular blob with peninsulas and bays
+  const pts=spikes||24;
+  const angles=[], radii=[];
+  // Generate random radii per vertex
+  for(let i=0;i<pts;i++){
+    angles.push((i/pts)*Math.PI*2);
+    // Mix of big variation (peninsulas/bays) + small jaggedness
+    const bigNoise=(rng()-.5)*.55;    // ±27% — creates peninsulas & bays
+    const smallNoise=(rng()-.5)*.15;  // ±7.5% — fine jaggedness
+    radii.push(r*(0.72+bigNoise+smallNoise));
+  }
+  // Smooth pass — average with neighbors to soften sharp spikes
+  const smoothed=radii.map((v,i)=>{
+    const prev=radii[(i-1+pts)%pts], next=radii[(i+1)%pts];
+    return v*.55+prev*.22+next*.22;
+  });
+  // Draw with bezier curves for organic look
   ctx.beginPath();
   for(let i=0;i<=pts;i++){
-    const a=(i/pts)*Math.PI*2;
-    const noise1=rng()*.28+rng()*.18;
-    const rad=r*(0.62+noise1);
-    const px=cx+Math.cos(a)*rad*(1+rng()*.2);
-    const py=cy+Math.sin(a)*rad*(.72+rng()*.18);
-    i===0?ctx.moveTo(px,py):ctx.lineTo(px,py);
+    const idx=i%pts, nextIdx=(i+1)%pts;
+    const a=angles[idx], rad=smoothed[idx];
+    const stretch=.85+rng()*.3; // anisotropic stretch
+    const px=cx+Math.cos(a)*rad*stretch;
+    const py=cy+Math.sin(a)*rad*(2-stretch)*.7;
+    if(i===0){ctx.moveTo(px,py);continue;}
+    // Use quadratic curve to midpoint for organic shape
+    const prevA=angles[(idx-1+pts)%pts], prevR=smoothed[(idx-1+pts)%pts];
+    const cpx=cx+Math.cos((prevA+a)/2)*(prevR+rad)/2*(.9+rng()*.2);
+    const cpy=cy+Math.sin((prevA+a)/2)*(prevR+rad)/2*(.6+rng()*.15);
+    ctx.quadraticCurveTo(cpx,cpy,px,py);
   }
   ctx.closePath();
 }
@@ -344,11 +364,13 @@ function generateTerrain(W, H, worldName) {
   // ── Continents — layered approach ──
   // Each continent: deep base (dark green) → lowland → forest interior
   const continents=[
-    {cx:W*(.22+rng()*.18), cy:H*(.25+rng()*.20), r:Math.min(W,H)*(.16+rng()*.10), spikes:22},
-    {cx:W*(.58+rng()*.18), cy:H*(.38+rng()*.20), r:Math.min(W,H)*(.12+rng()*.08), spikes:20},
-    {cx:W*(.35+rng()*.12), cy:H*(.65+rng()*.15), r:Math.min(W,H)*(.08+rng()*.05), spikes:16},
-    {cx:W*(.72+rng()*.10), cy:H*(.65+rng()*.12), r:Math.min(W,H)*(.05+rng()*.04), spikes:14},
-    {cx:W*(.80+rng()*.08), cy:H*(.20+rng()*.12), r:Math.min(W,H)*(.04+rng()*.03), spikes:12},
+    {cx:W*(.22+rng()*.18), cy:H*(.25+rng()*.20), r:Math.min(W,H)*(.18+rng()*.10), spikes:32},
+    {cx:W*(.58+rng()*.18), cy:H*(.38+rng()*.20), r:Math.min(W,H)*(.13+rng()*.08), spikes:28},
+    {cx:W*(.35+rng()*.12), cy:H*(.65+rng()*.15), r:Math.min(W,H)*(.09+rng()*.05), spikes:22},
+    {cx:W*(.72+rng()*.10), cy:H*(.65+rng()*.12), r:Math.min(W,H)*(.06+rng()*.04), spikes:18},
+    {cx:W*(.80+rng()*.08), cy:H*(.20+rng()*.12), r:Math.min(W,H)*(.05+rng()*.03), spikes:16},
+    {cx:W*(.12+rng()*.08), cy:H*(.45+rng()*.08), r:Math.min(W,H)*(.03+rng()*.02), spikes:12},
+    {cx:W*(.88+rng()*.05), cy:H*(.48+rng()*.08), r:Math.min(W,H)*(.025+rng()*.02),spikes:10},
   ];
 
   continents.forEach(c=>{
@@ -385,9 +407,9 @@ function generateTerrain(W, H, worldName) {
     texGrad.addColorStop(0,'rgba(255,255,255,.06)');texGrad.addColorStop(.5,'rgba(0,0,0,.04)');texGrad.addColorStop(1,'rgba(0,0,0,.12)');
     ctx.fillStyle=texGrad;blobPath(ctx,c.cx,c.cy,c.r*1.06,c.spikes,r2);ctx.fill();
 
-    // Mountain peaks (triangles near center)
+    // Mountain peaks
     const mkr=()=>srand(S*3.1+ci*23+(rngI++)*0.5);
-    for(let m=0;m<5+Math.floor(c.r/30);m++){
+    for(let m=0;m<8+Math.floor(c.r/18);m++){
       const a=mkr()*Math.PI*2, dist=c.r*(0.05+mkr()*.22);
       const mx=c.cx+Math.cos(a)*dist, my=c.cy+Math.sin(a)*dist*.7;
       const mh=6+mkr()*10, mw=mh*.5;
@@ -399,7 +421,7 @@ function generateTerrain(W, H, worldName) {
 
     // Trees in forest ring
     const tr=()=>srand(S*4.3+ci*31+(rngI++)*0.6);
-    for(let t=0;t<12+Math.floor(c.r/8);t++){
+    for(let t=0;t<20+Math.floor(c.r/5);t++){
       const a=tr()*Math.PI*2, dist=c.r*(.48+tr()*.26);
       const tx2=c.cx+Math.cos(a)*dist, ty2=c.cy+Math.sin(a)*dist*.8;
       const ts=3+tr()*4;
@@ -420,6 +442,16 @@ function generateTerrain(W, H, worldName) {
     ctx.beginPath();ctx.moveTo(sx,sy);
     ctx.quadraticCurveTo(c.cx+Math.cos(a+.2)*c.r*.7,c.cy+Math.sin(a+.2)*c.r*.7,ex,ey);ctx.stroke();
   });
+
+  // Compass rose (bottom-right)
+  const compX=W-55, compY=H-55;
+  ctx.save(); ctx.globalAlpha=.35;
+  ctx.strokeStyle='#c9a84c'; ctx.lineWidth=1.2;
+  ctx.beginPath();ctx.moveTo(compX,compY-22);ctx.lineTo(compX,compY+22);ctx.stroke();
+  ctx.beginPath();ctx.moveTo(compX-22,compY);ctx.lineTo(compX+22,compY);ctx.stroke();
+  ctx.fillStyle='#c9a84c';ctx.beginPath();ctx.moveTo(compX,compY-25);ctx.lineTo(compX-4,compY-15);ctx.lineTo(compX+4,compY-15);ctx.closePath();ctx.fill();
+  ctx.font='bold 9px Cinzel,serif';ctx.textAlign='center';ctx.fillText('N',compX,compY-28);
+  ctx.restore();
 
   // Vignette
   const vig=ctx.createRadialGradient(W/2,H/2,H*.25,W/2,H/2,W*.75);
