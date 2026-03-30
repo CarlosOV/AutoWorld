@@ -365,7 +365,6 @@ function drawMap() {
     // Mood dot
     ctx.fillStyle=moodColor; ctx.beginPath(); ctx.arc(px+9,py-9,3,0,Math.PI*2); ctx.fill();
   });
-}
 
   ctx.restore();
 }
