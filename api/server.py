@@ -92,6 +92,13 @@ def tech_summary():
     civs = json.loads(get_world_state("civilizations", "[]"))
     return [get_civ_tech_summary(c["name"]) for c in civs]
 
+@app.post("/api/reset-terrain-cache")
+def reset_terrain_cache():
+    """Clear cached continent centers so they regenerate with correct RNG on next request."""
+    from world.memory import set_world_state
+    set_world_state("continent_centers", "")
+    return {"status": "cleared"}
+
 @app.post("/api/reset-positions")
 def reset_positions():
     """Clear stored agent positions so they re-snap to correct CIV_CENTERS."""

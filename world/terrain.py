@@ -25,18 +25,23 @@ def get_continent_centers(world_seed: str) -> list[dict]:
     rng_i = [0]
 
     def rng():
-        val = _srand(S * 1.7 + rng_i[0] * 0.31 + rng_i[0] * rng_i[0] * 0.007)
+        # Mirror JS: (rngI++) uses pre-increment value, rngI*rngI uses post-increment
+        i = rng_i[0]
         rng_i[0] += 1
-        return val
+        return _srand(S * 1.7 + i * 0.31 + rng_i[0] * rng_i[0] * 0.007)
+
+    # Skip ocean texture calls: 300 iterations × 5 rng() calls each = 1500
+    for _ in range(1500):
+        rng()
 
     centers = [
-        {"x": .22 + rng() * .18, "y": .25 + rng() * .20},  # continent 1
-        {"x": .58 + rng() * .18, "y": .38 + rng() * .20},  # continent 2
-        {"x": .35 + rng() * .12, "y": .65 + rng() * .15},  # continent 3
-        {"x": .72 + rng() * .10, "y": .65 + rng() * .12},  # continent 4
-        {"x": .80 + rng() * .08, "y": .20 + rng() * .12},  # continent 5
-        {"x": .12 + rng() * .08, "y": .45 + rng() * .08},  # continent 6
-        {"x": .88 + rng() * .05, "y": .48 + rng() * .08},  # continent 7
+        {"x": .22 + rng() * .18, "y": .25 + rng() * .20},
+        {"x": .58 + rng() * .18, "y": .38 + rng() * .20},
+        {"x": .35 + rng() * .12, "y": .65 + rng() * .15},
+        {"x": .72 + rng() * .10, "y": .65 + rng() * .12},
+        {"x": .80 + rng() * .08, "y": .20 + rng() * .12},
+        {"x": .12 + rng() * .08, "y": .45 + rng() * .08},
+        {"x": .88 + rng() * .05, "y": .48 + rng() * .08},
     ]
     centers = [{"x": round(c["x"], 4), "y": round(c["y"], 4)} for c in centers]
     set_world_state("continent_centers", json.dumps(centers))
