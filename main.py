@@ -167,6 +167,17 @@ def _ensure_agents():
         a = generate_agent(WORLD_NAME, existing)
         print(f"  ✨ {a['name']} ({a.get('occupation','?')})")
 
+    # Assign positions immediately so agents appear on land from the start
+    from world.drama import ensure_positions
+    import json
+    from world.memory import get_world_state
+    all_agents = get_all_agents()
+    civs = json.loads(get_world_state("civilizations", "[]"))
+    all_agents, _ = ensure_positions(all_agents, civs)
+    for a in all_agents:
+        save_agent(a["name"], a)
+    print("📍 Agent positions assigned.")
+
 
 if __name__ == "__main__":
     args = sys.argv[1:]
