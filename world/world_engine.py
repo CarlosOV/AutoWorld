@@ -155,17 +155,27 @@ Respond ONLY with valid JSON:
     log_event("birth", f"👶 A new soul arrives in {WORLD_NAME}: {data['name']}, future {data['occupation']}.", parent_names)
     print(f"[tick] 👶 New agent born: {data['name']}")
 
+_backoff_seconds = 0  # exponential backoff state
+
 def world_tick():
+    global _backoff_seconds
+    import time
+
+    if _backoff_seconds > 0:
+        print(f"[tick] ⏳ Backoff active — waiting {_backoff_seconds}s before next LLM attempt")
+        time.sleep(_backoff_seconds)
+
     try:
         _world_tick_inner()
+        _backoff_seconds = 0  # success → reset backoff
     except Exception as e:
         err = str(e)
-        if err.startswith("RATE_LIMIT:"):
-            parts = err.split(":", 2)
-            wait  = parts[1] if len(parts) > 1 else "unknown"
-            print(f"[tick] ⏳ Rate limit hit — skipping tick, resets in {wait}s. World continues next tick.")
+        if err.startswith("RATE_LIMIT:") or "429" in err or "403" in err:
+            _backoff_seconds = min(max(_backoff_seconds * 2, 60), 3600)  # 60s → 120s → 240s → ... → max 1h
+            print(f"[tick] ⏳ Rate limit/provider error — backoff now {_backoff_seconds}s. World stays alive.")
         else:
-            print(f"[tick] ⚠️ Tick failed (world keeps running): {err}")
+            _backoff_seconds = min(max(_backoff_seconds * 2, 30), 600)  # 30s → 60s → ... → max 10min
+            print(f"[tick] ⚠️ Tick failed (world keeps running): {err}. Backoff {_backoff_seconds}s")
 
 def _world_tick_inner():
     print(f"[tick] === World tick for {WORLD_NAME} ===")
@@ -200,28 +210,52 @@ def _world_tick_inner():
     civs = _get_civilizations()
     civs_str = ", ".join([f"{c['name']} ({c['status']})" for c in civs]) if civs else "none"
 
+    # --- SINGLE LLM CALL: event + reactions in one prompt ---
+    reactors = random.sample(agents, k=min(2, len(agents)))
+    reactor_names = [a["name"] for a in reactors]
+    reactor_descs = "; ".join([f"{a['name']} ({a.get('occupation','?')}, mood: {a.get('mood','?')})" for a in reactors])
+
     event_prompt = f"""
 World: {WORLD_NAME} | {ctx['year']} | Era: {ctx['era']}
 Civilizations: {civs_str}
 {f"World Lore: {ctx['lore']}" if ctx['lore'] else ""}
 Recent events:
 {ctx['recent']}
+Characters present: {reactor_descs}
 
-Generate ONE interesting event happening right now. 2-3 sentences. No JSON.
+Generate ONE interesting world event (2-3 sentences), then a 1-sentence reaction from each character.
+Format:
+EVENT: <the event>
+{reactor_names[0]}: <reaction in first person>
+{reactor_names[1] if len(reactor_names) > 1 else "---"}: <reaction in first person>
 """
-    event_desc = ask_llm(event_prompt, max_tokens=200)
-    print(f"[tick] Event: {event_desc[:80]}...")
+    combined = ask_llm(event_prompt, max_tokens=300)
+    print(f"[tick] Combined: {combined[:80]}...")
+
+    # Parse combined response
+    lines = combined.strip().split("\n")
+    event_desc = ""
+    reactions = {}
+    for line in lines:
+        line = line.strip()
+        if not line:
+            continue
+        if line.upper().startswith("EVENT:"):
+            event_desc = line[6:].strip()
+        else:
+            for rname in reactor_names:
+                if line.startswith(f"{rname}:"):
+                    reactions[rname] = line[len(rname)+1:].strip()
+    if not event_desc:
+        event_desc = lines[0] if lines else "Something happened."
 
     is_epic = any(kw in event_desc.lower() for kw in EPIC_KEYWORDS)
-    involved = [a["name"] for a in random.sample(agents, k=min(2, len(agents)))]
-    log_event("world_event", event_desc, involved)
+    log_event("world_event", event_desc, reactor_names)
 
-    # Agent reactions (1-2 agents)
-    reactors = random.sample(agents, k=min(2, len(agents)))
     for agent in reactors:
-        agent = trim_agent_memories(agent)
-        reaction = agent_react(agent, event_desc, WORLD_NAME)
-        log_event("agent_reaction", f"{agent['name']}: {reaction}", [agent["name"]])
+        reaction = reactions.get(agent["name"], "")
+        if reaction:
+            log_event("agent_reaction", f"{agent['name']}: {reaction}", [agent["name"]])
         agent["memories"] = agent.get("memories", []) + [f"Year {year}: {event_desc[:80]}"]
         agent = trim_agent_memories(agent)
         save_agent(agent["name"], agent)

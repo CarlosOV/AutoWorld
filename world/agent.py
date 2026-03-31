@@ -22,7 +22,7 @@ Responde SOLO con JSON válido, sin markdown:
   "memories": []
 }}
 """
-    for attempt in range(3):
+    for attempt in range(5):
         try:
             raw = ask_llm(prompt, max_tokens=300)
             start = raw.find("{")
@@ -31,10 +31,10 @@ Responde SOLO con JSON válido, sin markdown:
             save_agent(data["name"], data)
             return data
         except Exception as e:
-            print(f"[agent] Attempt {attempt+1} failed: {e}")
-            if attempt < 2:
-                time.sleep(3)
-    raise Exception("Failed to generate agent after 3 attempts")
+            wait = min(3 * (2 ** attempt), 300)  # 3s, 6s, 12s, 24s, 48s... max 5min
+            print(f"[agent] Attempt {attempt+1}/5 failed: {e} — retrying in {wait}s")
+            time.sleep(wait)
+    raise Exception("Failed to generate agent after 5 attempts")
 
 def agent_react(agent: dict, event: str, world_name: str) -> str:
     """Get agent's reaction to a world event."""

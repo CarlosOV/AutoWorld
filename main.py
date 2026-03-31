@@ -70,12 +70,24 @@ def _bootstrap_world():
     centers = get_continent_centers(seed)
     print(f"🗺️  Terrain generated — {len(centers)} continents")
 
-    # 3. Generate agents
+    # 3. Generate agents (with exponential backoff per agent)
+    import time as _time
     print(f"👥 Generating {NUM_AGENTS} inhabitants...")
-    for _ in range(NUM_AGENTS):
-        existing = [a["name"] for a in get_all_agents()]
-        a = generate_agent(WORLD_NAME, existing)
-        print(f"   ✨ {a['name']} ({a.get('occupation','?')})")
+    generated = 0
+    backoff = 0
+    while generated < NUM_AGENTS:
+        if backoff > 0:
+            print(f"   ⏳ Waiting {backoff}s before retrying...")
+            _time.sleep(backoff)
+        try:
+            existing = [a["name"] for a in get_all_agents()]
+            a = generate_agent(WORLD_NAME, existing)
+            print(f"   ✨ {a['name']} ({a.get('occupation','?')})")
+            generated += 1
+            backoff = 0  # reset on success
+        except Exception as e:
+            backoff = min(max(backoff * 2, 60), 900)  # 60s → 120s → ... → max 15min
+            print(f"   ⚠️ Agent generation failed: {e}. Backoff {backoff}s")
 
     # 4. Assign positions on land (no civs yet — spread across continents evenly)
     agents = get_all_agents()

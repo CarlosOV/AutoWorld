@@ -139,7 +139,7 @@ DRAMA_EVENTS = [
 
 def maybe_gossip(agents: list, world_year: int) -> bool:
     """Generate a juicy dramatic event between two agents."""
-    if len(agents) < 2 or random.random() > 0.40:
+    if len(agents) < 2 or random.random() > 0.15:  # 15% chance (saves LLM calls)
         return False
 
     a, b = random.sample(agents, 2)
@@ -197,7 +197,7 @@ PERSONAL_ARCS = [
 
 def maybe_secondary_story(agents: list, world_year: int) -> bool:
     """Generate a personal subplot for one agent."""
-    if not agents or random.random() > 0.30:
+    if not agents or random.random() > 0.10:  # 10% chance (saves LLM calls)
         return False
 
     agent = random.choice(agents)
