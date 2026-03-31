@@ -66,13 +66,11 @@ def ask_llm(prompt: str, system: str = "", max_tokens: int = 500, language: str 
         return _call_model(DEFAULT_MODEL, messages, limit)
     except Exception as e:
         err = str(e)
-        if err.startswith("RATE_LIMIT:"):
-            raise  # Don't fallback on rate limit — it's a quota issue
         print(f"[llm] Primary model ({DEFAULT_MODEL}) failed: {err}")
         if not FALLBACK_MODEL or FALLBACK_MODEL == DEFAULT_MODEL:
             raise
 
-    # Try fallback model
+    # Try fallback model (works for rate limits too — fallback may be a paid model)
     print(f"[llm] Trying fallback model: {FALLBACK_MODEL}")
     time.sleep(2)
     return _call_model(FALLBACK_MODEL, messages, limit)
