@@ -4,7 +4,7 @@ import requests
 
 OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY", "")
 DEFAULT_MODEL = os.getenv("LLM_MODEL", "minimax/minimax-m2.5:free")
-FALLBACK_MODEL = os.getenv("LLM_FALLBACK_MODEL", "meta-llama/llama-3.3-70b-instruct:free")
+FALLBACK_MODEL = os.getenv("LLM_FALLBACK_MODEL", "")  # empty = no fallback
 MAX_TOKENS = int(os.getenv("LLM_MAX_TOKENS", "0"))  # 0 = no limit (let model decide)
 WORLD_LANGUAGE = os.getenv("WORLD_LANGUAGE", "Spanish")  # language for all LLM outputs
 
