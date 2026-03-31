@@ -47,31 +47,39 @@ def cmd_reset():
     cur.close()
     conn.close()
     print("✅ World wiped.")
-    _bootstrap_world()
+    # Bootstrap terrain immediately (no LLM needed), agents generated via _ensure_agents in cmd_start
+    import random as _rnd
+    from world.memory import set_world_state
+    from world.terrain import get_continent_centers
+    seed = str(_rnd.randint(100000, 999999))
+    set_world_state("world_seed", seed)
+    print(f"🌱 World seed: {seed}")
+    centers = get_continent_centers(seed)
+    print(f"🗺️  Terrain generated — {len(centers)} continents")
     cmd_start()
 
 
 def _bootstrap_world():
     """
-    Full world creation sequence — only called on first start or after reset.
-    Order matters: seed → terrain → agents → positions.
+    Generate agents with exponential backoff. Terrain must exist already.
+    Called from _ensure_agents when no agents exist.
     """
-    import random, json
-    from world.memory import set_world_state, ensure_world_seed
+    import json, time as _time
+    from world.memory import set_world_state, ensure_world_seed, get_world_state as _gws
     from world.terrain import get_continent_centers
     from world.drama import ensure_positions
 
-    # 1. Generate unique seed
-    seed = str(random.randint(100000, 999999))
-    set_world_state("world_seed", seed)
-    print(f"🌱 World seed: {seed}")
-
-    # 2. Generate terrain centers (stored in DB, used by frontend to draw land)
+    # Ensure seed + terrain exist (idempotent — only creates if missing)
+    seed = _gws("world_seed", "")
+    if not seed:
+        import random as _rnd
+        seed = str(_rnd.randint(100000, 999999))
+        set_world_state("world_seed", seed)
+        print(f"🌱 World seed: {seed}")
     centers = get_continent_centers(seed)
-    print(f"🗺️  Terrain generated — {len(centers)} continents")
+    print(f"🗺️  Terrain: {len(centers)} continents")
 
-    # 3. Generate agents (with exponential backoff per agent)
-    import time as _time
+    # Generate agents with backoff
     print(f"👥 Generating {NUM_AGENTS} inhabitants...")
     generated = 0
     backoff = 0
@@ -84,14 +92,14 @@ def _bootstrap_world():
             a = generate_agent(WORLD_NAME, existing)
             print(f"   ✨ {a['name']} ({a.get('occupation','?')})")
             generated += 1
-            backoff = 0  # reset on success
+            backoff = 0
         except Exception as e:
             backoff = min(max(backoff * 2, 60), 900)  # 60s → 120s → ... → max 15min
             print(f"   ⚠️ Agent generation failed: {e}. Backoff {backoff}s")
 
-    # 4. Assign positions on land (no civs yet — spread across continents evenly)
+    # Assign positions on land
     agents = get_all_agents()
-    civs = json.loads(get_world_state("civilizations", "[]"))
+    civs = json.loads(_gws("civilizations", "[]"))
     agents, _ = ensure_positions(agents, civs)
     from world.memory import save_agent
     for a in agents:
@@ -105,9 +113,8 @@ def cmd_start():
 
     print(f"🌍 Starting {WORLD_NAME}... tick every {TICK_INTERVAL} min")
     init_db()
-    _ensure_agents()
 
-    # Launch web dashboard in background thread
+    # 1. WEB SERVER FIRST — always available, even if LLM is down
     web_port = int(os.getenv("WEB_PORT", "8000"))
     def run_web():
         uvicorn.run("api.server:app", host="0.0.0.0", port=web_port, log_level="warning")
@@ -115,10 +122,13 @@ def cmd_start():
     t.start()
     print(f"🌐 Dashboard running at http://localhost:{web_port}")
 
-    # Launch Telegram bot in background thread
+    # 2. Telegram bot
     from world.telegram_bot import start_bot
     start_bot()
     print(f"🤖 Telegram bot active")
+
+    # 3. Ensure agents exist (retries in background if LLM is down)
+    _ensure_agents()
 
     def safe_tick():
         try:
@@ -129,7 +139,6 @@ def cmd_start():
     from datetime import datetime, timedelta
     scheduler = BlockingScheduler()
 
-    # Only run immediately if world has never ticked, otherwise wait for next interval
     last_tick_year = int(get_world_state("world_year_num", "0"))
     if last_tick_year == 0:
         print("🌱 First tick — generating world...")
